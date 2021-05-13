@@ -1,0 +1,2057 @@
+---
+title: "Project_Code"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+summary(cars)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+set.seed(7645378)
+options(digits=4)
+library(BiocManager)
+BiocManager::version() 			# check the version
+
+#BiocManager::install(c("affyio", "affy", "limma", "oligo"), ask=F) # run every time
+# This may be slow because of the large number of dependencies
+library(affy)              # activate library, run every time
+library(affyio)            # activate library, run every time
+library(oligo)             # activate library, run every time
+library(limma)             # activate library, run every time
+
+#BiocManager::install(c("GEOquery"), ask=F)
+library(GEOquery)
+#BiocManager::install(c("Biobase"), ask=F)
+library(Biobase)
+#BiocManager::install(c("knitr"), ask=F)
+library(knitr)
+#BiocManager::install(c("simpleaffy"), ask=F)
+library(simpleaffy)
+#BiocManager::install(c("GenomicRanges"), ask=F)
+library(GenomicRanges)
+#BiocManager::install(c("Organism.dplyr"), ask=F)
+library(Organism.dplyr)
+#BiocManager::install(c("illuminaio"), ask=F)
+library(illuminaio)
+#install.packages("XML", ask=F)
+library(XML)
+#install.packages("statmod", ask=F)
+library(statmod)
+#install.packages("cgdsr", ask=F)
+library(cgdsr)
+#install.packages("R2HTML", ask=F)
+library(R2HTML)
+#install.packages("hash", ask=F)
+library(hash)
+#install.packages("ggplot2", ask=F)
+library(ggplot2)
+#install.packages("ggrepel", ask=F)
+library(ggrepel)
+#install.packages("gplots", ask=F)
+library(gplots)
+#install.packages("heatmap.plus", ask=F)
+library(heatmap.plus)
+#install.packages("beeswarm", ask=F)
+library(beeswarm)
+#install.packages("xtable", ask=F) # let this re-start, hit "yes"
+library(xtable)
+#install.packages("dplyr", ask=F)
+library(dplyr)
+#install.packages("rmarkdown")  # let this re-start, hit "yes"
+library(rmarkdown)
+library(ggvenn) #for venn diagrams
+
+#BiocManager::install("maSigPro")
+library(maSigPro)
+
+#BiocManager::install("biomaRt", ask=F)  #www.bioconductor.org/packages/release/bioc/html/biomaRt.html
+library(biomaRt) # biomaRt v2.46.2 # 
+#citation("biomaRt")
+#BiocManager::install("illuminaHumanv4.db", ask=F) # v1.26
+library(illuminaHumanv4.db)
+#BiocManager::install("huex10sttranscriptcluster.db", ask=F)  
+library(huex10sttranscriptcluster.db)
+library(data.table)
+#install.packages("gridExtra")
+library(gridExtra)
+library(cowplot)
+setwd("/media/newdrive/BCANCER/HER_POS/IDAT_FILES/")
+
+#Getting dataset and making an expression set called eset2 
+gset2 <- getGEO("GSE64033", GSEMatrix =TRUE, getGPL=FALSE)
+if (length(gset2) > 1) idx <- grep("GPL10558", attr(gset2, "names")) else idx <- 1
+eset <- gset2[[idx]]
+#str(eset)
+
+#quantile normalisation + log2 tranformation
+ex4 <- exprs(eset) # new
+qx4 <- as.numeric(quantile(ex4, c(0., 0.25, 0.5, 0.75, 0.99, 1.0), na.rm=T)) # new
+LogC4 <- (qx4[5] > 100) || (qx4[6]-qx4[1] > 50 && qx4[2] > 0) # new
+if (LogC4) { ex4[which(ex4 <= 0)] <- NaN # new
+exprs(eset) <- log2(ex4) } # new
+eset2 <- eset # new
+eset2 <- exprs(eset2)
+
+#making a table containing metadata from eset called relevant_info
+relevant_info <- pData(eset)[,c(1,2,33,35,36)] #shows title, geo_acession, celltype , treatment, treatment time (treatment time - N.B was not present for xenograft data (samples 55-65), so replace with times - 0h and 4/7 days [done].
+
+#making metadata read nicer
+relevant_info_renamed <- relevant_info #making a copy of relevant_info called relevant_info_renamed
+names(relevant_info_renamed) <- c("Sample", "GEO_accession", "Sample_type", "Treatment", "Timepoint") #renaming the columns
+
+#Renaming the samples in relevant_info_renamed
+Samples <- sub("DMSO", "Control", relevant_info_renamed$Sample) #this is the change i want to make
+relevant_info_renamed$Sample <- Samples #"applying" this change.
+Samples <- sub(" day 7_2", "_2", relevant_info_renamed$Sample) #repeating the above
+relevant_info_renamed$Sample <- Samples
+Samples <- sub(" day 7_1", "_1", relevant_info_renamed$Sample)
+relevant_info_renamed$Sample <- Samples
+Samples <- sub("_1uM_", "_", relevant_info_renamed$Sample)
+relevant_info_renamed$Sample <- Samples
+Samples <- sub("BYL_4", "BYL4", relevant_info_renamed$Sample)
+relevant_info_renamed$Sample <- Samples
+Samples <- sub("BYL_8", "BYL8", relevant_info_renamed$Sample)
+relevant_info_renamed$Sample <- Samples
+Samples <- sub("BYL_12", "BYL12", relevant_info_renamed$Sample)
+relevant_info_renamed$Sample <- Samples
+Samples <- sub("BYL_24", "BYL24", relevant_info_renamed$Sample)
+relevant_info_renamed$Sample <- Samples
+
+Treatments <- sub("Ctrl", "Control", relevant_info_renamed$Treatment) #replacing Ctrl with Control in the treatments column of relevant_info_renamed
+relevant_info_renamed$Treatment <- Treatments #applying the changes to the table
+
+Timepoints <- sub("Control", "0h", relevant_info_renamed$Timepoint) #change Control to 0h.
+relevant_info_renamed$Timepoint <- Timepoints #applying changes
+
+#change NA values in timepoint for the xenograft samples to 4/7days. 
+relevant_info_renamed$Timepoint[28:30] = "12h"
+relevant_info_renamed$Timepoint[31:33] = "24h"
+relevant_info_renamed$Timepoint[55:57] = "0h"   
+relevant_info_renamed$Timepoint[58:60] = "4 days"
+relevant_info_renamed$Timepoint[61:63] = "0h"
+relevant_info_renamed$Timepoint[64:65] = "7days"
+
+
+#the irregular samples are in irregular_samples dataframe. 
+irregular_samples <- relevant_info_renamed[c(1,14,16,36,54,65),] #adding several mislablled samples in irregular_samples dataframe
+
+#making new dataframe with only the ok samples
+oksamples <- relevant_info_renamed[!(relevant_info_renamed$Sample %in% irregular_samples$Sample),] #do not include samples in irregular_sampels in oksamples - has 58 samples inc PDX and MCF7 xenografts
+
+eset3 <- eset2[, !colnames(eset2) %in% c(irregular_samples$GEO_accession)] #make new eset without the mislabelled samples, eset3 has 58 samples inc PDX and MCF7 xenografts
+
+
+#making eset4 and dataframe called CLs_PDX, with only cell lines and PDX from oksamples. [no more MCF7 xenograft]
+these <- filter(oksamples, Sample_type=="MCF7 xenograft") #make subset of oksamples called these which contains remaining MCF7 xenograft samples
+
+CLs_PDX <- oksamples[!(oksamples$Sample %in% these$Sample),] #make a dataset called CLs_PDX which contains all samples from oksamples except the MCF7 xenograft samples. 55 samples in CLs-PDX (no MCF7 xenograft or mislabelled samples).
+
+#row.names(CLs_PDX) <- CLs_PDX$Sample dont do this bc rownames need to match eset4 column names (the GEO accessions of the samples). Could try to change eset4 column names too but not sure how to do this as ' col.names(eset4) <- CLs_PDX$Sample ' didnt work. 
+
+#eset 4 has cell lines and PDX. 
+eset4 <- eset2[,!colnames(eset2) %in% c(these$GEO_accession, irregular_samples$GEO_accession)] #new expression set without mislabelled samples and MCF7 xenografts.
+
+
+
+
+##### COLOUR VECTORS ######
+colours <-c(rep("coral1", 15), rep("cadetblue2", 17), rep("green", 17), rep("orange", 6)) #colours for all 4 sample types (no more MCF7 xengorafts).
+
+sample_type_colours <- c("coral1", "cadetblue2", "green", "orange") #for legend of sample types, use four_sample_types vector of names in legend too.
+
+five_sample_types <- c("CAMA1", "MCF7", "T47D", "Patient derived xenograft", "MCF7 xenograft")
+
+timecolours_CLs <-c(rep("coral1", 3), rep("cadetblue2", 3), rep("green", 3), rep("deeppink", 3), rep("orange", 3), rep("cyan", 3)) #colours for different time points for CELL LINES only.
+
+timecolours_all <- c(rep(timecolours_CLs,3), rep("coral1",3), rep("gold",3), rep("coral1",3), rep("burlywood2",2)) #timepoint colours for ALL sample types
+
+
+timelabels <- c("0h","4h", "8h", "12h", "24h", "48h", "4days", "7days") #for legend when making plot of timepoints
+
+timelabels_colour <- c("coral1", "cadetblue2","green","deeppink","orange","cyan","gold","burlywood2") #for legend colours of timepoint plots
+
+
+
+#### GGPLOT BOXPLOT ###
+#for ggplot boxplot of all samples!!!
+library(reshape2)
+long <- melt(eset2) #convert in to long format for ggplot. 
+colnames(long) <- c("probe","sample","expression_value")
+
+#need to add column with sample_types for colouring boxes. 
+CAMA1 <- colnames(eset2)[1:18]
+MCF7 <- colnames(eset2)[19:36]
+T47D <- colnames(eset2)[37:54]
+PDX <- colnames(eset2)[55:60]
+MCF7_xeno <- colnames(eset2)[61:65]
+
+add1 <- long[(long$sample %in% CAMA1),] #filter long for CAMA1 samples. 
+sample_type <- c(rep("CAMA1",nrow(add1))) #vector of CAMA1
+add1 <- cbind(add1,sample_type) #add column of CAMA1 to add1. 
+
+add2 <- long[(long$sample %in% MCF7),]
+sample_type <- c(rep("MCF7",nrow(add2)))
+add2 <- cbind(add2,sample_type)
+
+add3 <- long[(long$sample %in% T47D),]
+sample_type <- c(rep("T47D",nrow(add3)))
+add3 <- cbind(add3,sample_type)
+
+add4 <- long[(long$sample %in% PDX),]
+sample_type <- c(rep("PDX",nrow(add4)))
+add4 <- cbind(add4,sample_type)
+
+add5 <- long[(long$sample %in% MCF7_xeno),]
+sample_type <- c(rep("MCF7 xenograft",nrow(add5)))
+add5 <- cbind(add5,sample_type)
+
+final <- rbind(add1, add2) #make final dataframe. Combining add1-5 
+final <- rbind(final, add3)
+final <- rbind(final, add4)
+final <- rbind(final, add5)  #now final has all samples and their sample_type column. 
+
+final$sample_type <- factor(final$sample_type, levels = c("CAMA1", "MCF7", "T47D", "PDX", "MCF7 xenograft")) #specify order of types so legend is right
+
+boxplot1 <- ggplot(final, aes(x=sample, y=expression_value, fill = sample_type)) + 
+geom_boxplot(colour = "gray50", width=1, outlier.size = 7.4, position=position_dodge(width=0.1)) +
+  scale_fill_manual(values=c("coral1", "cadetblue2", "green", "orange", "orchid1"))+
+  xlab(label = "Samples") +
+  ylab(label = "log2(Expression)") +
+  labs(title = "Gene expression across all samples")+
+  theme(axis.text.x=element_blank(),
+        axis.ticks.x=element_blank(),
+        plot.title = element_text(size= 40, hjust = 0.5),
+        legend.title = element_text(size = (27)),
+        legend.text = element_text(size = (27)),
+        axis.title = element_text(size = (35)),
+        axis.text = element_text(size = (30), colour = "grey32"),
+    plot.background = element_blank(),
+    panel.background = element_blank(),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    panel.border = element_rect(colour = "black", fill=NA, size=0.2))+     
+    guides(fill=guide_legend("Sample type")) +
+    guides(color = guide_legend(override.aes = list(size = 30)))
+
+
+
+png(boxplot1, file = "boxplot_allsamples_ggplot.png", width = 1500, height = 1000, unit = "px")
+boxplot1
+dev.off()
+
+
+
+#####   PCA PLOTS   ####
+#PC1 vs PC2 plot using all normalised data (basic R plot)
+colours <-c(rep("coral1", 18), rep("cadetblue2", 18), rep("green", 18), rep("orange", 6), rep("orchid1", 5)) #colours for each sample type. 
+sample_type_colours <- c("coral1", "cadetblue2", "green", "orange", "orchid1")
+five_sample_types <- c("CAMA1", "MCF7", "T47D", "Patient derived xenograft", "MCF7 xenograft")
+
+pca_proc<- prcomp(t(eset2))
+pcvalue1 = round(100*pca_proc$sdev[1]^2/(sum(pca_proc$sdev^2)),1)
+pcvalue2 = round(100*pca_proc$sdev[2]^2/(sum(pca_proc$sdev^2)),1)
+png(file="PC1vsPC2.png", width=30*pcvalue1, height=30*pcvalue2, units="px")
+par(mar=c(5,6,4,1)+.1)
+plot(pca_proc$x, col="black", pch=21, bg = colours, xlab= "PC1 (31.0)", ylab="PC2 (26.9)", main='Labeling all mislabelled samples',cex=3.5, cex.main = 3.5, cex.axis=2, cex.lab=3)  + grid(nx = 5, ny = 5)
+text(pca_proc$x[,1], pca_proc$x[,2], labels = NULL, pos=3, cex =1)
+legend('topright', legend = five_sample_types, pt.bg =sample_type_colours, col = "black", pch=21, cex=2.5, ncol=1)
+dev.off()
+
+
+# PC1 vs PC2 labelled by color
+#coloursand labels
+sample_type_colours <- c("coral1", "cadetblue2", "green", "orange", "orchid1") #for legend of sample types, use five_sample_types vector of names in legend too.
+
+timecolours_CLs <-c(rep("coral1", 3), rep("cadetblue2", 3), rep("green", 3), rep("deeppink", 3), rep("orange3", 3), rep("purple", 3)) #colours for different time points for CELL LINES only.
+
+timecolours_all <- c(rep(timecolours_CLs,3), rep("coral1",3), rep("gold",3), rep("coral1",3), rep("burlywood2",2)) #timepoint colours for ALL sample types
+
+timelabels <- c("0h","4h", "8h", "12h", "24h", "48h", "4days", "7days") #for legend when making plot of timepoints
+
+timelabels_colour <- c("coral1", "cadetblue2","green","deeppink","orange3","purple","gold","burlywood2") #for legend colours of timepoint plots
+
+#plot
+png(file="PC1vsPC2timecolours.png", width=30*31, height=30*26.9, units="px")
+par(mar=c(5,6,4,1)+.1)
+plot(pca_proc$x, col="black", pch=21, bg = timecolours_all, main="Samples coloured by time", xlab = "PC1 (31.0)", ylab = "PC2 (26.9)", cex.main = 3.5, cex=2.8, cex.axis=2, cex.lab=3)  + grid(nx = 5, ny = 5)
+text(pca_proc$x[,1], pca_proc$x[,2], labels = NULL, pos=3, cex =0.8)
+legend('topright', legend = timelabels, pt.bg = timelabels_colour, col = "black", pch=21, cex=2.5, ncol=1) 
+dev.off()
+
+
+#label replciates of MCF7 48h samples.
+MCF7_CLONLY <- c(rep(NA, 33),relevant_info_renamed$Sample[34:36], rep(NA, 29))
+
+png(file="PC1vsPC2labelMCF7.png", width=30*pcvalue1, height=30*pcvalue2, units="px")
+par(mar=c(5,6,4,1)+.1)
+plot(pca_proc$x, col="black", pch=21, bg = colours, main='Labelling MCF7 samples taken at 48h', cex=2.8, cex.axis=2, cex.lab=3, cex.main = 3.5, xlab = "PC1 (31.0)", ylab = "PC2 (26.9)")  + grid(nx = 5, ny = 5)
+text(pca_proc$x[,1], pca_proc$x[,2], labels = NULL, pos=2, cex =1.5)
+legend('topright', legend = five_sample_types, pt.bg = sample_type_colours, col = "black", pch=21, cex=2.5, ncol=1) 
+dev.off()
+
+
+#label replciates of T47D 48h samples.
+T47D_ONLY <- c(rep(NA, 51),relevant_info_renamed$Sample[52:54], rep(NA, 9))
+
+png(file="PC1vsPC2labelT47D.png", width=30*pcvalue1, height=30*pcvalue2, units="px")
+par(mar=c(5,6,4,1)+.1)
+plot(pca_proc$x, col="black", pch=21, bg = colours, main='Labelling T47D samples taken at 48h', cex=2.8, cex.axis=2, cex.lab=3, cex.main = 3.5, xlab = "PC1 (31.0)", ylab = "PC2 (26.9)")  + grid(nx = 5, ny = 5)
+text(pca_proc$x[,1], pca_proc$x[,2], labels = NULL, pos=4, cex =1.5)
+legend('topright', legend = five_sample_types, pt.bg = sample_type_colours, col = "black", pch=21, cex=2.5, ncol=1) 
+dev.off()
+
+
+#label replciates of MCF7 xenograft samples at 7 days.
+MCF7_xenoONLY <- c(rep(NA, 63),relevant_info_renamed$Sample[64:65])
+
+png(file="PC1vsPC2labelMCF7_xeno.png", width=30*pcvalue1, height=30*pcvalue2, units="px")
+par(mar=c(5,6,4,1)+.1)
+plot(pca_proc$x, col="black", pch=21, bg = colours, main='Labelling MCF7 xenograft samples at 7days', cex=2.8, cex.axis=2, cex.lab=3, cex.main = 3.5, xlab = "PC1 (31.0)", ylab = "PC2 (26.9)")  + grid(nx = 5, ny = 5)
+text(pca_proc$x[,1], pca_proc$x[,2], labels = NULL, pos=2, cex =1.5)
+legend('topright', legend = five_sample_types, pt.bg = sample_type_colours, col = "black", pch=21, cex=2.5, ncol=1) 
+dev.off()
+
+
+
+#label replciates of CAMA1 24h samples.
+CAMA1_ONLY <- c(rep(NA, 12),relevant_info_renamed$Sample[13:15], rep(NA, 50))
+
+png(file="PC1vsPC2labelCAMA1.png", width=30*pcvalue1, height=30*pcvalue2, units="px")
+par(mar=c(5,6,4,1)+.1)
+plot(pca_proc$x, col="black", pch=21, bg = colours, main='Labelling CAMA1 samples taken at 24h', cex=2.8, cex.axis=2, cex.lab=3, cex.main = 3.5, xlab = "PC1 (31.0)", ylab = "PC2 (26.9)")  + grid(nx = 5, ny = 5)
+text(pca_proc$x[,1], pca_proc$x[,2], labels = CAMA1_ONLY, pos=2, cex =1.5)
+legend('topright', legend = five_sample_types, pt.bg = sample_type_colours, col = "black", pch=21, cex=2.5, ncol=1) 
+dev.off()
+
+
+#label controls and 48h CAMA1 samples
+CAMA1_controls <- c(relevant_info_renamed$Sample[1:3], rep(NA,12), relevant_info_renamed$Sample[16:18], rep(NA, 47))
+png(file="PC1vsPC2labelCAMA1controls.png", width=30*pcvalue1, height=30*pcvalue2, units="px")
+par(mar=c(5,6,4,1)+.1)
+plot(pca_proc$x, col="black", pch=21, bg = colours, main='Labelling CAMA1 samples taken at 0h', cex=2.8, cex.axis=2, cex.lab=3, cex.main = 3.5, xlab = "PC1 (31.0)", ylab = "PC2 (26.9)", xlim = c(-30,0), ylim = c(40,60))  + grid(nx = 5, ny = 5)
+text(pca_proc$x[,1], pca_proc$x[,2], labels = CAMA1_controls, pos=2, cex =1.5)
+legend('topright', legend = five_sample_types, pt.bg = sample_type_colours, col = "black", pch=21, cex=2.5, ncol=1) 
+dev.off()
+
+
+#### PAIRWISE COMPARISON OF CELL LINES - VOLCANO PLOTS, SIGNIFICANT PROBES TABLE ####
+
+###Volcano plot looking at genes across the three cell lines #remember no more MCF7 xeno
+mypch <- c(rep(1,15),rep(2,17),rep(3,17),rep(4,6)) #numbers for the sample types
+design<- model.matrix(~-1+factor(mypch)) #same design for each comparison
+colnames(design)<- c('CAMA1', 'MCF7_CL','T47D','PDX') #  group labels
+
+#CAMA1 vs MCF7
+mypch <- c(rep(1,15),rep(2,17),rep(3,17),rep(4,6)) #numbers for the sample types
+design<- model.matrix(~-1+factor(mypch)) #same design for each comparison
+colnames(design)<- c('CAMA1', 'MCF7_CL','T47D','PDX') #  group labels
+top0<-  eBayes(contrasts.fit(lmFit(eset4, design), makeContrasts(CAMA1 - MCF7_CL, levels=design))) #compare CAMA1 to MCF7_CL
+top1<- topTable(top0, coef='CAMA1 - MCF7_CL',adjust='BH',number=34587,sort.by='P') 
+write.table(as.vector(top1[top1$adj.P.Val<0.05,]), file='CAMA1_MCF7_CL.txt')
+png(file="volcano_CAMA1_MCF7_CL.png", width=1000, height=1000, units="px") #make volcano plot 
+par(mar=c(5,6,4,1)+.7)
+plot(top1$logFC,-log10(top1$adj.P.Val), main="Differential gene expression between CAMA1 and MCF7 cell lines", xlab="log2(CAMA1/MCF7_CL)", ylab="-log10(BH P value)", cex=1.5,cex.main=2.5, cex.axis=1.5, cex.lab=2, pch=21, col="black", xlim = c(-7,7), ylim = c(0,70)) #can widen xlim to see more genes e.g. -12000,12000
+text(-5, 65, label = "Upregulated in CAMA1 cell line", cex = 1.8)
+text(5, 65, label = "Upregulated in MCF7 cell line", cex = 1.8)
+abline(v=2, col="red")
+abline(v=-2, col="red")
+abline(h=1.3, col="green")
+dev.off()
+
+###get significant genes/probes from the CAMA1 and MCF7 comparison
+sigprobes_CAMA1_MCF7_CL <- top1 %>% filter(adj.P.Val < 0.05 & abs(logFC)>2) #139 rows/probes. top1 has all 34,587 probes
+
+##ggplot version of volcano plot
+volcano1 <- top1 %>%
+  mutate(DE = adj.P.Val < 0.05 & abs(logFC) > 2) %>%
+  ggplot(aes(x = logFC, y = -log10(adj.P.Val),  colour = DE)) +
+  geom_point(aes(colour = DE), alpha = 0.5, size = 6) +
+  scale_colour_manual(values = c("grey30", "red")) +
+  lims(x = c(-8,8), y = c(0,80)) +
+  labs( x= "logFC",y = "-log10(adjusted p value)", title = "CAMA1 vs MCF7") + #, tag = "A") +
+  theme_bw()+
+  theme(legend.position = "none", 
+        plot.title = element_text(size= 40, hjust = 0.5, face = "bold"),
+        axis.title = element_text(size =35),
+        axis.text = element_text(size = 30, colour = "grey32")) +
+  geom_text(x=-5.25, y=70, label="Upregulated in MCF7", size = 11) +
+  geom_text(x=5.25, y=70, label="Upregulated in CAMA1", size = 11) +
+  geom_vline(xintercept=-2,color = "blue", size=0.5) +
+  geom_vline(xintercept=2, color = "blue",size = 0.5) +
+  geom_hline(yintercept = 1.3, colour = "blue", size = 0.5)
+      
+png(volcano1, file = "ggplot_volcano_CAMA1_MCF7.png", width = 1000, height = 1000, unit = "px")
+volcano1
+dev.off()
+
+
+
+
+#CAMA1 vs T47D
+mypch <- c(rep(1,15),rep(2,17),rep(3,17),rep(4,6)) #numbers for the sample types
+design<- model.matrix(~-1+factor(mypch))
+colnames(design)<- c('CAMA1', 'MCF7_CL','T47D','PDX') #  group labels
+top0_1<-  eBayes(contrasts.fit(lmFit(eset4, design), makeContrasts(CAMA1 - T47D, levels=design))) #compare CAMA1 to T47D
+top2<- topTable(top0_1, coef='CAMA1 - T47D',adjust='BH',number=34587,sort.by='P') 
+write.table(as.vector(top2[top2$adj.P.Val<0.05,]), file='CAMA1_T47D.txt')
+png(file="volcano_CAMA1_T47D.png", width=1000, height=1000, units="px")
+par(mar=c(5,6,4,1)+.7)
+plot(top2$logFC,-log10(top2$adj.P.Val), main="Differential gene expression between CAMA1 and T47D cell lines", xlab="log2(CAMA1/T47D)", ylab="-log10(BH P value)", cex=1.5,cex.main = 2.5, cex.axis=1.5, cex.lab=2, pch=21, col="black", xlim= c(-7,7), ylim = c(0,70))
+#can widen xlim to see more genes e.g. -15,000,15000
+text(-5, 65, label = "Upregulated in CAMA1 cell line", cex = 1.8)
+text(5, 65, label = "Upregulated in T47D cell line", cex = 1.8)
+abline(v=2, col="red")
+abline(v=-2, col="red")
+abline(h=1.3, col="green")
+dev.off()
+
+sigprobes_CAMA1_T47D <- top2 %>% filter(adj.P.Val < 0.05 & abs(logFC) >2) #100 significant rows/probes. top2 has all 34,587 probes
+
+##ggplot version of volcano plot
+volcano2 <- top2 %>%
+  mutate(DE = adj.P.Val < 0.05 & abs(logFC) > 2) %>%
+  ggplot(aes(x = logFC, y = -log10(adj.P.Val),  colour = DE)) +
+  geom_point(aes(colour = DE), alpha = 0.5, size = 6) +
+  scale_colour_manual(values = c("grey30", "red")) +
+  lims(x = c(-8,8), y = c(0,80)) +
+  labs( x= "logFC",y = "-log10(adjusted p value)", title = "CAMA1 vs T47D") + #, tag = "B") +
+  theme_bw()+
+  theme(legend.position = "none", 
+        plot.title = element_text(size= 40, hjust = 0.5, face = "bold"),
+        axis.title = element_text(size =35),
+        axis.text = element_text(size = 30, colour = "grey32")) +
+  geom_text(x=-5.25, y=70, label="Upregulated in T47D", size = 11) +
+  geom_text(x=5.25, y=70, label="Upregulated in CAMA1", size = 11) +
+  geom_vline(xintercept=-2,color = "blue", size=0.5) +
+  geom_vline(xintercept=2, color = "blue",size = 0.5)+
+  geom_hline(yintercept = 1.3, colour = "blue", size = 0.5)
+      
+png(volcano2, file = "ggplot_volcano_CAMA1_T47D.png", width = 1000, height = 1000, unit = "px")
+volcano2
+dev.off()
+
+
+
+
+
+#T47D vs MCF7_CL
+mypch <- c(rep(1,15),rep(2,17),rep(3,17),rep(4,6)) #numbers for the sample types
+design<- model.matrix(~-1+factor(mypch))
+colnames(design)<- c('CAMA1', 'MCF7_CL','T47D','PDX') #  group labels
+top0_2<-  eBayes(contrasts.fit(lmFit(eset4, design), makeContrasts(T47D - MCF7_CL, levels=design))) #compare T47D to MCF7_CL
+top3<- topTable(top0_2, coef='T47D - MCF7_CL',adjust='BH',number=34587,sort.by='P') 
+write.table(as.vector(top3[top3$adj.P.Val<0.05,]), file='T47D_MCF7_CL.txt')
+png(file="volcano_T47D_MCF7_CL.png", width=1000, height=1000, units="px")
+par(mar=c(5,6,4,1)+.7)
+plot(top3$logFC,-log10(top3$adj.P.Val), main="Differential gene expression between T47D and MCF7 cell lines", xlab="log2(T47D/MCF7_CL)", ylab="-log10(BH P value)", cex=1.5,cex.main=2.5, cex.axis=1.5, cex.lab=2, pch=21, col="black", xlim= c(-7,7), ylim = c(0,70)) #can widen xlim to see more genes e.g. -15,000,15000
+text(-5, 65, label = "Upregulated in T47D cell line", cex = 1.8)
+text(5, 65, label = "Upregulated in MCF7 cell line", cex = 1.8)
+abline(v=2, col="red")
+abline(v=-2, col="red")
+abline(h=1.3, col="green")
+dev.off()
+
+sigprobes_T47D_MCF7_CL <- top3 %>% filter(adj.P.Val < 0.05 & abs(logFC) >2) #259 rows/probes. top1 has all 34,587 probes
+
+#ggplot volcano plot
+volcano3 <- top3 %>%
+  mutate(DE = adj.P.Val < 0.05 & abs(logFC) > 2) %>%
+  ggplot(aes(x = logFC, y = -log10(adj.P.Val),  colour = DE)) +
+  geom_point(aes(colour = DE), alpha = 0.5, size = 6) +
+  scale_colour_manual(values = c("grey30", "red")) +
+  lims(x = c(-8,8), y = c(0,80)) +
+  labs( x= "logFC",y = "-log10(adjusted p value)", title = "T47D vs MCF7") + #,tag = "C") +
+  theme_bw()+
+  theme(legend.position = "none", 
+        plot.title = element_text(size= 40, hjust = 0.5, face = "bold"),
+        axis.title = element_text(size =35),
+        axis.text = element_text(size = 30, colour = "grey32")) +
+  geom_text(x=5.25, y=70, label="Upregulated in MCF7", size = 11) +
+  geom_text(x=-5.25, y=70, label="Upregulated in T47D", size = 11) +
+  geom_vline(xintercept=-2,color = "blue", size=0.5) +
+  geom_vline(xintercept=2, color = "blue",size = 0.5)+
+  geom_hline(yintercept = 1.3, colour = "blue", size = 0.5)
+  
+png(volcano3, file = "ggplot_volcano_T47D_MCF7.png", width = 1000, height = 1000, unit = "px")
+volcano3
+dev.off()
+
+  
+
+#making summary table of significant probes in pairwise analysis of cell lines
+total_CLcomp_sigprobes <- c(nrow(sigprobes_CAMA1_MCF7_CL), nrow(sigprobes_CAMA1_T47D), nrow(sigprobes_T47D_MCF7_CL)) #vector containing the number of rows in each set of significant probes
+
+pairwise_CLcomparison <- c("CAMA1 - MCF7_CL", "CAMA1 - T47D", "T47D - MCF7_CL") #vector containing the comparisons made
+
+summary_CLcomp_sigprobes <- data.frame(pairwise_CLcomparison, total_CLcomp_sigprobes) #combine the 2 vectors into a dataframe
+
+
+########## ANNOTATE PROBES (PAIRWISE COMPARISONS) ###############
+#BiocManager::install("biomaRt", ask=F) # #www.bioconductor.org/packages/release/bioc/html/biomaRt.html
+library(biomaRt) # biomaRt v2.46.2 # 
+#citation("biomaRt")
+BiocManager::install("illuminaHumanv4.db", ask=F) # v1.26
+library(illuminaHumanv4.db)
+BiocManager::install("huex10sttranscriptcluster.db", ask=F)  
+library(huex10sttranscriptcluster.db)
+library(data.table)
+install.packages("gridExtra")
+library(gridExtra)
+
+
+#CAMA1 vs MCF7
+mypch <- c(rep(1,15),rep(2,17),rep(3,17),rep(4,6)) #numbers for the sample types
+design<- model.matrix(~-1+factor(mypch))
+colnames(design)<- c('CAMA1', 'MCF7_CL','T47D','PDX')
+
+top0<-  eBayes(contrasts.fit(lmFit(eset4, design), makeContrasts(CAMA1 - MCF7_CL, levels=design))) # CAMA1 MCF7_CL
+top1<- topTable(top0, coef='CAMA1 - MCF7_CL',adjust='BH',number=34587,sort.by='P') 
+summary(top1$adj.P.Val)
+ 
+sigprobes_CAMA1_MCF7_CL <- top1 %>% filter(adj.P.Val < 0.05 & abs(logFC) > 2)
+Probe <- rownames(sigprobes_CAMA1_MCF7_CL)
+sigprobes_CAMA1_MCF7_CL <- cbind(sigprobes_CAMA1_MCF7_CL, Probe)
+
+
+#try this
+library(illuminaHumanv4.db) #34k probes in eset2
+info <- select(illuminaHumanv4.db, rownames(sigprobes_CAMA1_MCF7_CL), c("SYMBOL", "GENENAME")) # 36,775 entries
+
+info_temp <- data.frame(matrix( rep(0, length(info$PROBEID)), nrow=length(info$PROBEID), ncol=2))# temp data frame has 36,775 entries
+colnames(info_temp) <- c("SYMBOL", "GENENAME")
+str(info_temp)
+for (i in 1:length( rownames(sigprobes_CAMA1_MCF7_CL) ) ) { # all 34k probes	
+rownames(info_temp)[i] <- rownames(sigprobes_CAMA1_MCF7_CL)[i] 	
+info_temp[i,1] <-  select(illuminaHumanv4.db, rownames(sigprobes_CAMA1_MCF7_CL)[i], c("SYMBOL"))[2]
+info_temp[i,2] <-  select(illuminaHumanv4.db, rownames(sigprobes_CAMA1_MCF7_CL)[i], c("GENENAME"))[2]
+} # end for 
+# now check it worked
+head(info_temp) # “1:1 mapping” message not important
+str(info_temp)  # 36,775 rows for each unique gene
+
+annotated_CAMA1_MCF7_CL <- info_temp 
+
+write.table(annotated_CAMA1_MCF7_CL, file="annotated_CAMA1_MCF7_CL.txt", sep="\t") 
+
+#link genes to p value and logFC
+sigprobes_CAMA1_MCF7_CL <- top1 %>% filter(adj.P.Val < 0.05 & abs(logFC) > 2)
+
+limma_common1 <- intersect(rownames(sigprobes_CAMA1_MCF7_CL), rownames(annotated_CAMA1_MCF7_CL)) #435 genes
+
+limma_link1 <- subset(annotated_CAMA1_MCF7_CL, rownames(annotated_CAMA1_MCF7_CL) %in% limma_common1) #435
+
+limma_linking_CAMA1_MCF7_CL <- cbind(sigprobes_CAMA1_MCF7_CL[,c(1,4)], limma_link1) #435 genes
+
+limma_linking_CAMA1_MCF7_CL <- na.omit(limma_linking_CAMA1_MCF7_CL) #remove NAs, 417 left
+ 
+limma_linking_CAMA1_MCF7_CL <- limma_linking_CAMA1_MCF7_CL %>% distinct(limma_linking_CAMA1_MCF7_CL[,3], .keep_all = TRUE) #remove duplicate genes #397 left
+
+limma_linking_CAMA1_MCF7_CL <- limma_linking_CAMA1_MCF7_CL[,-5] #remove random column which appeared when using distinct()
+
+#write.table(format(limma_linking_CAMA1_MCF7_CL, digits = 3), file="limma_linking_CAMA1_MCF7_CL.txt", sep="\t")
+
+
+
+
+
+
+
+
+
+
+#CAMA1 vs T47D
+mypch <- c(rep(1,15),rep(2,17),rep(3,17),rep(4,6)) #numbers for the sample types
+design<- model.matrix(~-1+factor(mypch))
+colnames(design)<- c('CAMA1', 'MCF7_CL','T47D','PDX')
+
+top0_1<-  eBayes(contrasts.fit(lmFit(eset4, design), makeContrasts(CAMA1 - T47D, levels=design))) #compare CAMA1 to T47D
+top2<- topTable(top0_1, coef='CAMA1 - T47D',adjust='BH',number=34587,sort.by='P') 
+summary(top2$adj.P.Val)
+
+
+#try this
+mypch <- c(rep(1,15),rep(2,17),rep(3,17),rep(4,6)) #numbers for the sample types
+design<- model.matrix(~-1+factor(mypch))
+colnames(design)<- c('CAMA1', 'MCF7_CL','T47D','PDX')
+
+top0_1<-  eBayes(contrasts.fit(lmFit(eset4, design), makeContrasts(CAMA1 - T47D, levels=design))) #compare CAMA1 to T47D
+top2<- topTable(top0_1, coef='CAMA1 - T47D',adjust='BH',number=34587,sort.by='P') 
+summary(top2$adj.P.Val)
+
+sigprobes_CAMA1_T47D <- top2 %>% filter(adj.P.Val < 0.05 & abs(logFC) >2) #100 significant rows/probes. top2 has all 34,587 probes
+
+library(illuminaHumanv4.db) #34k probes in eset2
+info <- select(illuminaHumanv4.db, rownames(sigprobes_CAMA1_T47D), c("SYMBOL", "GENENAME")) # 36,775 entries
+
+info_temp <- data.frame(matrix( rep(0, length(info$PROBEID)), nrow=length(info$PROBEID), ncol=2))# temp data frame has 36,775 entries
+colnames(info_temp) <- c("SYMBOL", "GENENAME")
+str(info_temp)
+for (i in 1:length( rownames(sigprobes_CAMA1_T47D) ) ) { # all 34k probes	
+rownames(info_temp)[i] <- rownames(sigprobes_CAMA1_T47D)[i] 	
+info_temp[i,1] <-  select(illuminaHumanv4.db, rownames(sigprobes_CAMA1_T47D)[i], c("SYMBOL"))[2]
+info_temp[i,2] <-  select(illuminaHumanv4.db, rownames(sigprobes_CAMA1_T47D)[i], c("GENENAME"))[2]
+} # end for 
+# now check it worked
+head(info_temp) # “1:1 mapping” message not important
+str(info_temp)  # 36,775 rows for each unique gene
+
+annotated_CAMA1_T47D <- info_temp #3301 significant genes, 3119 probes.
+
+#write.table(annotated_CAMA1_T47D, file="annotated_CAMA1_T47D.txt", sep="\t") 
+
+
+#link genes to p value and logFC
+sigprobes_CAMA1_T47D <- top2 %>% filter(adj.P.Val < 0.05 & abs(logFC) >2) #100 significant rows/probes. top2 has all 34,587 probes
+
+#CAMA1_T47D - linking extreme genes to their p-values and logFC
+limma_common2 <- intersect(rownames(sigprobes_CAMA1_T47D), rownames(annotated_CAMA1_T47D)) #396 genes
+
+limma_link2 <- subset(annotated_CAMA1_T47D, rownames(annotated_CAMA1_T47D) %in% limma_common2) #396
+
+limma_linking_CAMA1_T47D <- cbind(sigprobes_CAMA1_T47D[,c(1,4)], limma_link2) #396 genes
+
+limma_linking_CAMA1_T47D <- na.omit(limma_linking_CAMA1_T47D) #remove NAs, 379 left
+ 
+limma_linking_CAMA1_T47D <- limma_linking_CAMA1_T47D %>% distinct(limma_linking_CAMA1_T47D[,3], .keep_all = TRUE) #remove duplicate genes #364 left
+
+limma_linking_CAMA1_T47D <- limma_linking_CAMA1_T47D[,-5] #remove random column which appeared when using distinct()
+
+#write.table(format(limma_linking_CAMA1_T47D, digits = 3), file="limma_linking_CAMA1_T47D.txt", sep="\t")
+
+
+
+
+
+#T47D vs MCF7
+#try this
+mypch <- c(rep(1,15),rep(2,17),rep(3,17),rep(4,6)) #numbers for the sample types
+design<- model.matrix(~-1+factor(mypch))
+colnames(design)<- c('CAMA1', 'MCF7_CL','T47D','PDX')
+
+top0_2<-  eBayes(contrasts.fit(lmFit(eset4, design), makeContrasts(T47D - MCF7_CL, levels=design))) #compare T47D to MCF7_CL
+top3<- topTable(top0_2, coef='T47D - MCF7_CL',adjust='BH',number=34587,sort.by='P')
+
+sigprobes_T47D_MCF7_CL <- top3 %>% filter(adj.P.Val < 0.05 & abs(logFC) >2) #259 rows/probes. top1 has all 34,587 probes
+
+library(illuminaHumanv4.db) #34k probes in eset2
+info <- select(illuminaHumanv4.db, rownames(sigprobes_T47D_MCF7_CL), c("SYMBOL", "GENENAME")) # 36,775 entries
+
+info_temp <- data.frame(matrix( rep(0, length(info$PROBEID)), nrow=length(info$PROBEID), ncol=2))# temp data frame has 36,775 entries
+colnames(info_temp) <- c("SYMBOL", "GENENAME")
+str(info_temp)
+for (i in 1:length( rownames(sigprobes_T47D_MCF7_CL) ) ) { # all 34k probes	
+rownames(info_temp)[i] <- rownames(sigprobes_T47D_MCF7_CL)[i] 	
+info_temp[i,1] <-  select(illuminaHumanv4.db, rownames(sigprobes_T47D_MCF7_CL)[i], c("SYMBOL"))[2]
+info_temp[i,2] <-  select(illuminaHumanv4.db, rownames(sigprobes_T47D_MCF7_CL)[i], c("GENENAME"))[2]
+} # end for 
+# now check it worked
+head(info_temp) # “1:1 mapping” message not important
+str(info_temp)  # 36,775 rows for each unique gene
+
+annotated_T47D_MCF7_CL <- info_temp 
+
+#write.table(annotated_T47D_MCF7_CL, file="annotated_T47D_MCF7.txt", sep="\t") 
+
+#link annotations to p value and logFC
+#significant genes
+sigprobes_T47D_MCF7_CL <- top3 %>% filter(adj.P.Val < 0.05 & abs(logFC)>2) #139 rows/probes. top1 has all 34,587 probes
+
+
+#T47D_MCF7_CL - linking extreme genes to their p-values and logFC
+limma_common3 <- intersect(rownames(sigprobes_T47D_MCF7_CL), rownames(annotated_T47D_MCF7_CL)) #477 genes
+
+limma_link3 <- subset(annotated_T47D_MCF7_CL, rownames(annotated_T47D_MCF7_CL) %in% limma_common3) #477
+
+limma_linking_T47D_MCF7_CL <- cbind(sigprobes_T47D_MCF7_CL[,c(1,4)], limma_link3) #477 genes
+
+limma_linking_T47D_MCF7_CL <- na.omit(limma_linking_T47D_MCF7_CL) #remove NAs, 464 left
+ 
+limma_linking_T47D_MCF7_CL <- limma_linking_T47D_MCF7_CL %>% distinct(limma_linking_T47D_MCF7_CL[,3], .keep_all = TRUE) #remove duplicate genes #437 left
+
+limma_linking_T47D_MCF7_CL <- limma_linking_T47D_MCF7_CL[,-5] #remove random column which appeared when using distinct()
+
+#write.table(format(limma_linking_T47D_MCF7_CL, digits = 3), file="limma_linking_T47D_MCF7_CL.txt", sep="\t")
+
+#WHAT PROBES ARE COMMON BETWEEN ALL 3 CELL LINES?
+#first remove 0s and NAs 
+annotated_CAMA1_MCF7_CL[annotated_CAMA1_MCF7_CL==0] <- NA
+annotated_CAMA1_MCF7_CL <- na.omit(annotated_CAMA1_MCF7_CL) #454 to 417
+
+annotated_CAMA1_T47D[annotated_CAMA1_T47D==0] <- NA
+annotated_CAMA1_T47D <- na.omit(annotated_CAMA1_T47D) #609 to 379
+
+annotated_T47D_MCF7_CL[annotated_T47D_MCF7_CL ==0] <- NA
+annotated_T47D_MCF7_CL <- na.omit(annotated_T47D_MCF7_CL) #704 to 464
+
+#remove duplicates
+annotated_CAMA1_MCF7_CL<-  distinct(annotated_CAMA1_MCF7_CL, .keep_all = TRUE) #417 to 397
+
+annotated_CAMA1_T47D <- distinct(annotated_CAMA1_T47D, .keep_all = TRUE) #379 to 364
+
+annotated_T47D_MCF7_CL <- distinct(annotated_T47D_MCF7_CL, .keep_all = TRUE) #464 to 437
+
+#COMPARING GENES 
+#Venn diagram - all significant genes in tstep (aside from NAs and 0s.)
+x <- list(
+  CAMA1vsMCF7 = annotated_CAMA1_MCF7_CL[,1], 
+  CAMA1vsT47D  = annotated_CAMA1_T47D[,1], 
+  T47DvsMCF7  = annotated_T47D_MCF7_CL[,1]
+  ) #venn diagrams dont contain duplicates
+
+#use this list to make a venn diagram
+png(file="Venn_limma_cell_lines.png", width=1000, height=1000, units="px")
+ggvenn(x, fill_color = c("#0073C2FF", "#EFC000FF", "#CD534CFF"), stroke_size = 1, set_name_size = 9, text_size = 8)
+dev.off() 
+
+
+ 
+#### make a table of genes that are significant in all
+
+#intersect(intersect(table1$ID, table2$ID), table3$ID)
+#all annotated genes
+limma_extreme_common <- intersect(intersect(annotated_CAMA1_MCF7_CL, annotated_CAMA1_T47D), annotated_T47D_MCF7_CL) #list of probes common to all 3. #important.
+
+limma_extreme_common1 <- intersect(annotated_CAMA1_MCF7_CL, annotated_CAMA1_T47D)
+
+limma_extreme_common2 <- intersect(annotated_CAMA1_T47D, annotated_T47D_MCF7_CL)
+
+limma_extreme_common3 <- intersect(annotated_CAMA1_MCF7_CL, annotated_T47D_MCF7_CL)
+
+#making table of extreme genes in intersects
+Intersection <- c(rep("CAMA1vsMCF7 vs CAMA1vsT47D", nrow(limma_extreme_common1)), rep("CAMA1vsT47D vs T47DvsMCF7",nrow(limma_extreme_common2)), rep("CAMA1vsMCF7 vs T47D/MCF7", nrow(limma_extreme_common3)), rep("Common between all comparisons", nrow(limma_extreme_common)))
+
+Intersection <- cbind(Intersection, c(limma_extreme_common1[,1], limma_extreme_common2[,1], limma_extreme_common3[,1], limma_extreme_common[,1]))
+
+Intersection <- cbind(Intersection, c(limma_extreme_common1[,2], limma_extreme_common2[,2], limma_extreme_common3[,2], limma_extreme_common[,2]))
+
+Intersection[ !duplicated(Intersection[,2], fromLast=T),] #remove duplicates, keep the last ones (these are common to all comparisons)
+
+#there are duplicates, remove on excel. 
+write.table(Intersection,file="Intersection_genes_masigpro.txt", sep="\t")
+
+
+################## maSigPro ###############
+
+##### CAMA1 #####
+
+#making design for masigpro analysis ###
+Replicate <-c(rep(1,2),rep(2,3),rep(3,3),rep(4,3),rep(5,2), rep(6,2)) #CAMA1 samples, groups according to timepoints
+Time_hours <- c(rep(0,2), rep(4,3),rep(8,3), rep(12,3), rep(24,2), rep(48,2)) #timepoints
+Control <- c(rep(1, 2), rep(0,13)) #instead of hours0
+hours4 <- c(rep(0,2), rep(1,3), rep(0,10))
+hours8<- c(rep(0, 5), rep(1,3), rep(0,7))
+hours12 <- c(rep(0,8), rep(1,3), rep(0,4))
+hours24 <- c(rep(0,11), rep(1,2), rep(0,2))
+hours48 <-  c(rep(0,13), rep(1,2))
+
+#renaming column names in eset4 to be sample names instead of accession numbers
+sampleeset4 <- eset4
+colnames(sampleeset4) <- CLs_PDX$Sample
+CAMA1_eset <- sampleeset4[,1:15] #eset with CAMA1 samples only, columns named after samples. 
+
+#make the design
+CAMA1_design <- cbind(Time_hours, Replicate, Control, hours4, hours8, hours12, hours24, hours48) #make the design
+rownames(CAMA1_design) <- colnames(CAMA1_eset) #rownames of design must be the same as the column names as sampleeset4, which are sample names
+
+
+#make regression design matrix 
+CAMA1_edesign <- make.design.matrix(CAMA1_design, degree = 1) #degree = 1 for linear regression
+
+CAMA1_edesign$groups.vector #show assignment of regression variables to experimental groups
+
+CAMA1_fit <- p.vector(CAMA1_eset, CAMA1_edesign, Q = 0.05, MT.adjust = "BH") #compute regression fit for each probe in the CAMA1 samples (columns 1:15 in eset4). p value is corrected for multiple comparisons. p value is used to find F statistic, which is used to identify significant genes.  
+
+CAMA1_fit$i # returns the number of significant genes, 3119.
+CAMA1_fit$alfa # gives p-value at the Q false discovery control level
+CAMA1_sigs_exp <- CAMA1_fit$SELEC # is a matrix with the significant probes and their expression values
+
+CAMA1_tstep <- T.fit(CAMA1_fit, step.method = "backward", alfa = 0.05) #stepwise regression to find significant variables for each gene (finds the differences between experimental groups).
+
+summary(CAMA1_tstep$sol$`R-squared`)#sol has p-value of regression ANOVA, R2 and p value of the regression coefficients of variables are given (contains significant genes only)
+
+
+
+
+#### VOLCANO PLOT, p-value vs regression coefficient ###### 
+CAMA1_tstep$sol #contains p-value of ANOVA, R2 and p value of regression coefficients
+
+top5percent_pvalue1<- quantile(CAMA1_tstep$sol[,1], probs = c(0.05))
+top5percent_r2_1<- quantile(CAMA1_tstep$sol[,2], probs = c(0.95))
+
+#png(file="volcano_CAMA1masigpro48h.png", width=1000, height=1000, units="px")
+#par(mar=c(5,6,4,1.6)+.7)
+#plot(CAMA1_tstep$sol[,2],-log10(CAMA1_tstep$sol[,1]), main="Differentially expressed genes in CAMA1 cell line", xlab="R-squared", ylab="-log10(BH P value)", cex=2,cex.main=2.4, cex.axis=2, cex.lab=2.2, pch=21, col= "black", bg= ifelse(CAMA1_tstep$sol[,1] < top5percent_pvalue1 & CAMA1_tstep$sol[,2] > top5percent_r2_1,'coral1', 'gray90'), xlim = c(0,1), ylim = c(0,22)) + grid() #can widen xlim to see more genes e.g. -15,000,15000 #coloured based on p-value - if P value in MCF7_tstep$sol is less than 1e-9, then that point is red.
+#abline(h= -log10(top5percent_pvalue1), col="dodgerblue3")
+#abline(v = top5percent_r2_1, col = "dodgerblue3")
+#dev.off()
+
+#ggplot version of pvalue/r2 graph. 
+#if i decide to use pairwise cell line comparison, then lims(x = c(0,1), y = c(0,22)) +
+pv_r2_ggplot_CAMA1 <- CAMA1_tstep$sol %>%
+  mutate(DE = CAMA1_tstep$sol[,1] < top5percent_pvalue1 & CAMA1_tstep$sol[,2] > top5percent_r2_1) %>%
+  ggplot(aes(x = CAMA1_tstep$sol[,2], y = -log10(CAMA1_tstep$sol[,1]),  colour = DE)) +
+  geom_point(aes(colour = DE), alpha = 0.5, size = 6) +
+  scale_colour_manual(values = c("grey57", "salmon")) +
+  lims(x = c(0,1), y = c(0,13)) +
+  labs(x= "R-squared",y = "-log10(BH p value)", title = "Identification of extreme probes in CAMA1 cell line") + #, tag = "A") +
+  theme_bw()+
+  theme(legend.position = "none", 
+        plot.title = element_text(size= 40, hjust = 0.5),
+        axis.title = element_text(size =35),
+        axis.text = element_text(size = 30, colour = "grey32"),
+        plot.tag = element_text(size = 40)) +
+  geom_text(x= (top5percent_r2_1 - 0.1), y=0, label="r2 = 0.929", size = 12, colour = "steelblue3") +
+  geom_text(x= 0.25, y= (-log10(top5percent_pvalue1) + 0.5), label="p value = -log10(2.813e-07 )", size = 12, colour = "steelblue3") +
+  geom_vline(xintercept= top5percent_r2_1, color = "steelblue3", size=0.7) +
+  geom_hline(yintercept = -log10(top5percent_pvalue1), , colour = "steelblue3", size = 0.7)
+      
+png(pv_r2_ggplot_CAMA1, file = "pvalue_r2_ggplot_CAMA1.png", width = 1000, height = 1000, unit = "px")
+pv_r2_ggplot_CAMA1
+dev.off()
+
+
+
+#annotate probes
+library(illuminaHumanv4.db) #34k probes in eset2
+info <- select(illuminaHumanv4.db, rownames(CAMA1_tstep$sol), c("SYMBOL", "GENENAME")) # 36,775 entries
+
+info_temp <- data.frame(matrix( rep(0, length(info$PROBEID)), nrow=length(info$PROBEID), ncol=2))# temp data frame has 36,775 entries
+colnames(info_temp) <- c("SYMBOL", "GENENAME")
+str(info_temp)
+for (i in 1:length( rownames(MCF7_tstep$sol) ) ) { # all 34k probes	
+rownames(info_temp)[i] <- rownames(CAMA1_tstep$sol)[i] 	
+info_temp[i,1] <-  select(illuminaHumanv4.db, rownames(CAMA1_tstep$sol)[i], c("SYMBOL"))[2]
+info_temp[i,2] <-  select(illuminaHumanv4.db, rownames(CAMA1_tstep$sol)[i], c("GENENAME"))[2]
+} # end for 
+# now check it worked
+head(info_temp) #"1:1 mapping" message not important
+str(info_temp)  #36,775 rows for each unique gene
+
+CAMA1_tstep_annotated_probes <- info_temp
+#write.table(CAMA1_tstep_annotated_probes, file="CAMA1_tstep_annotated_probes.txt", sep="\t")
+
+##import the file
+#CAMA1_tstep_annotated_probes<- read.delim("C:/Users/laure/OneDrive/Documents/4th Year/4th year semester 2/BE488 Research Project/CAMA1_tstep_annotated_probes.txt", header = TRUE, sep = "\t")
+#dim(CAMA1_tstep_annotated_probes) #3301 probes
+#remove duplicates and 0s. 
+CAMA1_tstep_annotated_probes <- distinct(CAMA1_tstep_annotated_probes, .keep_all = FALSE)
+CAMA1_tstep_annotated_probes[CAMA1_tstep_annotated_probes==0] <- NA
+CAMA1_tstep_annotated_probes <- na.omit(CAMA1_tstep_annotated_probes)
+
+#CAMA1_tstep_annotated_probes<- read.delim("C:/Users/laure/OneDrive/Documents/4th Year/4th year semester 2/BE488 Research Project/CAMA1_tstep_annotated_probes.txt", header = TRUE, sep = "\t") #import again bc then i need to use it to filter thru CAMA1_tstep$so to be able to get all extreme probes.
+
+#remove 0s and NAs
+most_significant_CAMA1 <- dplyr::filter(CAMA1_tstep$sol, CAMA1_tstep$sol[,1] < top5percent_pvalue1 & CAMA1_tstep$sol[,2] > top5percent_r2_1) #58 probes
+
+# CAMA1 - linking genes to the p-value and r2 value of most significant probes 
+common1 <- intersect(rownames(most_significant_CAMA1), rownames(CAMA1_tstep_annotated_probes))
+link1 <- subset(CAMA1_tstep_annotated_probes, rownames(CAMA1_tstep_annotated_probes) %in% common1) 
+linking_CAMA1 <- cbind(most_significant_CAMA1[,1:2], link1)
+
+linking_CAMA1 <- linking_CAMA1 %>% distinct(linking_CAMA1[,3], .keep_all = TRUE) #remove duplicate genes. #56 left.
+
+linking_CAMA1 <- linking_CAMA1[,-5]
+
+#write.table(format(linking_CAMA1, digits = 3), file="linking_CAMA1.txt", sep="\t")
+
+#annotate linking_CAMA1 for entrez ids
+#getting entrezids: 
+x <- illuminaHumanv4ENTREZID
+length(x) # list of 48,107 of linked probes and genes
+mapped_probes <- mappedkeys(x) # Convert to a list
+xx <- as.list(x[mapped_probes]) # compare mapped probes # 22,283 elements
+if(length(xx) > 0) { 
+CAMA1_ENTREZIDs <-  xx[rownames(linking_CAMA1)] 
+ }
+
+#add to dataframe
+linking_CAMA1$ENTREZ <- CAMA1_ENTREZIDs
+
+#make copy without NULL ENTREZIDs
+linking_CAMA1 <- linking_CAMA1[linking_CAMA1$ENTREZ!="NULL",]  #52 genes left
+ENTREZIDs_CAMA1 <- linking_CAMA1$ENTREZ
+ENTREZIDs_CAMA1 <- noquote(ENTREZIDs_CAMA1)
+
+write.table(ENTREZIDs_CAMA1,row.names = FALSE, col.names = FALSE, quote = FALSE, "ENTREZIDs_CAMA1.txt")
+
+
+#annotate all genes with consistent changes
+##import the file
+#CAMA1_tstep_annotated_probes<- read.delim("C:/Users/laure/OneDrive/Documents/4th Year/4th year semester 2/BE488 Research Project/CAMA1_tstep_annotated_probes.txt", header = TRUE, sep = "\t")
+#remove duplicates and 0s. 
+CAMA1_tstep_annotated_probes <- distinct(CAMA1_tstep_annotated_probes, .keep_all = TRUE)
+CAMA1_tstep_annotated_probes[CAMA1_tstep_annotated_probes==0] <- NA
+CAMA1_tstep_annotated_probes <- na.omit(CAMA1_tstep_annotated_probes) 
+
+x <- illuminaHumanv4ENTREZID
+length(x) # list of 48,107 of linked probes and genes
+mapped_probes <- mappedkeys(x) # Convert to a list
+xx <- as.list(x[mapped_probes]) # compare mapped probes # 22,283 elements
+if(length(xx) > 0) { 
+CAMA1tstep_ENTREZIDs <-  xx[rownames(CAMA1_tstep_annotated_probes)] 
+ }
+
+#add to dataframe
+CAMA1_CCgenes <- CAMA1_tstep_annotated_probes[,c(1:2)]
+CAMA1_CCgenes$ENTREZ <- CAMA1tstep_ENTREZIDs
+
+#make copy without NULL ENTREZIDs
+CAMA1_CCgenes <- CAMA1_CCgenes[CAMA1_CCgenes$ENTREZ!="NULL",]  #167 genes left
+CAMA1tstep_ENTREZIDs <- CAMA1_CCgenes$ENTREZ
+CAMA1tstep_ENTREZIDs <- noquote(CAMA1tstep_ENTREZIDs)  #3107 genes
+
+write.table(CAMA1tstep_ENTREZIDs,row.names = FALSE, col.names = FALSE, quote = FALSE, "CAMA1tstep_ENTREZIDs.txt")
+
+
+
+
+
+
+
+
+##### MCF7 ##### 
+Replicate <-c(rep(1,3),rep(2,3),rep(3,3),rep(4,3),rep(5,3), rep(6,2)) #MCF7 samples, numbered according to timepoints
+Time_hours <- c(rep(0,3), rep(4,3),rep(8,3), rep(12,3), rep(24,3), rep(48,2)) #timepoints
+Control <- c(rep(1, 3), rep(0,14)) #instead of hours0
+hours4 <- c(rep(0,3), rep(1,3), rep(0,11))
+hours8<- c(rep(0, 6), rep(1,3), rep(0,8))
+hours12 <- c(rep(0,9), rep(1,3), rep(0,5))
+hours24 <- c(rep(0,12), rep(1,3), rep(0,2))
+hours48 <-  c(rep(0,15), rep(1,2))
+
+#renaming column names in eset4 to be sample names instead of accession numbers
+sampleeset4 <- eset4
+colnames(sampleeset4) <- CLs_PDX$Sample
+MCF7_eset <- sampleeset4[,16:32] #eset with CAMA1 samples only, columns named after samples. 
+
+MCF7_design <- cbind(Time_hours, Replicate, Control, hours4, hours8, hours12, hours24, hours48) #make the design
+rownames(MCF7_design) <- colnames(MCF7_eset) #rownames of design must be the same as the column names as MCF7_eset4, which are sample names
+
+MCF7_edesign <- make.design.matrix(MCF7_design, degree = 1) #degree = 1 for linear regression
+
+MCF7_fit <- p.vector(MCF7_eset, MCF7_edesign, Q = 0.05, MT.adjust = "BH") #compute regression fit for each probe in the MCF7 samples (columns 16:32 in eset4). p value is corrected for multiple comparisons. p value is used to find F statistic, which is used to identify significant genes.  
+
+MCF7_tstep <- T.fit(MCF7_fit, step.method = "backward", alfa = 0.05) #stepwise regression to find significant variables for each gene (finds the differences between experimental groups).
+
+
+
+####p-value vs regression coefficient ###### PLOT2
+MCF7_tstep$sol #contains p-value of ANOVA, R2 and p value of regression coefficients
+
+top5percent_pvalue2<- quantile(MCF7_tstep$sol[,1], probs = c(0.05))
+top5percent_r2_2<- quantile(MCF7_tstep$sol[,2], probs = c(0.95))
+
+png(file="volcano_MCF7masigpro48h.png", width=1000, height=1000, units="px")
+par(mar=c(5,6,4,1.6)+.7)
+plot(MCF7_tstep$sol[,2],-log10(MCF7_tstep$sol[,1]), main="Differentially expressed genes in MCF7 cell line", xlab="R-squared", ylab="-log10(BH P value)", cex=2,cex.main=2.4, cex.axis=2, cex.lab=2.2, pch=21, col= "black", bg= ifelse(MCF7_tstep$sol[,1] < top5percent_pvalue2 & MCF7_tstep$sol[,2] > top5percent_r2_2,'coral1', 'gray90'),xlim = c(0,1), ylim = c(0,22)) + grid() #can widen xlim to see more genes e.g. -15,000,15000 #coloured based on p-value - if P value in MCF7_tstep$sol is less than 1e-9, then that point is red.
+abline(h= -log10(top5percent_pvalue2), col="dodgerblue3")
+abline(v = top5percent_r2_2, col = "dodgerblue3")
+dev.off()
+
+
+##ggplot version of pvalue/r2 cut off graph
+pv_r2_ggplot_MCF7 <- MCF7_tstep$sol %>%
+  mutate(DE = MCF7_tstep$sol[,1] < top5percent_pvalue2 & MCF7_tstep$sol[,2] > top5percent_r2_2) %>%
+  ggplot(aes(x = MCF7_tstep$sol[,2], y = -log10(MCF7_tstep$sol[,1]),  colour = DE)) +
+  geom_point(aes(colour = DE), alpha = 0.5, size = 6) +
+  scale_colour_manual(values = c("grey57", "salmon")) +
+  lims(x = c(0,1), y = c(0,25)) +
+  labs(x= "R-squared",y = "-log10(BH p value)", title = "Identification of extreme probes in MCF7 cell line") +
+  theme_bw()+
+  theme(legend.position = "none", 
+        plot.title = element_text(size= 40, hjust = 0.5),
+        axis.title = element_text(size =35),
+        axis.text = element_text(size = 30, colour = "grey32"),
+        plot.tag = element_text(size = 40)) +
+  geom_text(x= (top5percent_r2_2 - 0.1), y=0, label="r2 = 0.957", size = 12, colour = "steelblue3") +
+  geom_text(x= 0.25, y= (-log10(top5percent_pvalue2) + 0.5), label="p value = -log10(2.579e-08)", size = 12, colour = "steelblue3") +
+  geom_vline(xintercept= top5percent_r2_2, color = "steelblue3", size=0.7) +
+  geom_hline(yintercept = -log10(top5percent_pvalue2), , colour = "steelblue3", size = 0.7)
+      
+png(pv_r2_ggplot_MCF7, file = "pvalue_r2_ggplot_MCF7.png", width = 1000, height = 1000, unit = "px")
+pv_r2_ggplot_MCF7
+dev.off()
+
+
+
+
+######annotate probes
+library(illuminaHumanv4.db) #3589 probes in MCF7_tstep$sol
+info <- select(illuminaHumanv4.db, rownames(MCF7_tstep$sol), c("SYMBOL", "GENENAME")) # 36,775 entries
+
+info_temp <- data.frame(matrix( rep(0, length(info$PROBEID)), nrow=length(info$PROBEID), ncol=2))# temp data frame has 36,775 entries
+colnames(info_temp) <- c("SYMBOL", "GENENAME")
+str(info_temp)
+for (i in 1:length( rownames(MCF7_tstep$sol) ) ) { # all 34k probes	
+rownames(info_temp)[i] <- rownames(MCF7_tstep$sol)[i] 	
+info_temp[i,1] <-  select(illuminaHumanv4.db, rownames(MCF7_tstep$sol)[i], c("SYMBOL"))[2]	
+info_temp[i,2] <-  select(illuminaHumanv4.db, rownames(MCF7_tstep$sol)[i], c("GENENAME"))[2]
+} # end for 
+# now check it worked
+head(info_temp) # "1:1 mapping" message not important
+str(info_temp)  # 3754 rows for each unique gene
+
+MCF7_tstep_annotated_probes <- info_temp #3754 genes --> more than MCF7_tstep$sol has (3589 probes)
+#write.table(MCF7_tstep_annotated_probes, file="MCF7_tstep_annotated_probes.txt", sep="\t")
+
+##import the file
+#MCF7_tstep_annotated_probes<- read.delim("C:/Users/laure/OneDrive/Documents/4th Year/4th year semester 2/BE488 Research Project/MCF7_tstep_annotated_probes.txt", header = TRUE, sep = "\t")
+#dim(MCF7_tstep_annotated_probes)
+
+
+#genes in top 5% of R2 and bottom 5% of p value
+most_significant_MCF7 <- dplyr::filter(MCF7_tstep$sol, MCF7_tstep$sol[,1] < top5percent_pvalue2 & MCF7_tstep$sol[,2] > top5percent_r2_2) #115 probes
+
+# MCF7 - linking extreme genes to their p-values and r2 values
+common2 <- intersect(rownames(most_significant_MCF7), rownames(MCF7_tstep_annotated_probes)) #115
+link2 <- subset(MCF7_tstep_annotated_probes, rownames(MCF7_tstep_annotated_probes) %in% common2) #112
+linking_MCF7 <- cbind(most_significant_MCF7[,1:2], link2)
+
+linking_MCF7 <- na.omit(linking_MCF7) #remove NAs, 112 left
+ 
+linking_MCF7 <- linking_MCF7 %>% distinct(linking_MCF7[,3], .keep_all = TRUE) #remove duplicate genes #112 left
+
+linking_MCF7 <- linking_MCF7[,-5] #remove random column which appeared when using distinct()
+
+#write.table(format(linking_MCF7, digits = 3), file="linking_MCF7.txt", sep="\t")
+
+
+#annotate linking_MCF7 for entrez ids of extreme genes.
+#getting entrezids: 
+x <- illuminaHumanv4ENTREZID
+length(x) # list of 48,107 of linked probes and genes
+mapped_probes <- mappedkeys(x) # Convert to a list
+xx <- as.list(x[mapped_probes]) # compare mapped probes # 22,283 elements
+if(length(xx) > 0) { 
+MCF7_ENTREZIDs <-  xx[rownames(linking_MCF7)] 
+ }
+
+#add to dataframe
+linking_MCF7$ENTREZ <- MCF7_ENTREZIDs
+
+#make copy without NULL ENTREZIDs
+linking_MCF7 <- linking_MCF7[linking_MCF7$ENTREZ!="NULL",]  #110 genes left
+ENTREZIDs_MCF7 <- linking_MCF7$ENTREZ
+ENTREZIDs_MCF7 <- noquote(ENTREZIDs_MCF7)
+
+write.table(ENTREZIDs_MCF7,row.names = FALSE, col.names = FALSE, quote = FALSE, "ENTREZIDs_MCF7.txt")
+
+#annotate all genes with consistent changes
+##import the file
+#MCF7_tstep_annotated_probes<- read.delim("C:/Users/laure/OneDrive/Documents/4th Year/4th year semester 2/BE488 Research Project/MCF7_tstep_annotated_probes.txt", header = TRUE, sep = "\t")
+#remove duplicates and 0s. 
+MCF7_tstep_annotated_probes <- distinct(MCF7_tstep_annotated_probes, .keep_all = TRUE)
+MCF7_tstep_annotated_probes[MCF7_tstep_annotated_probes==0] <- NA
+MCF7_tstep_annotated_probes <- na.omit(MCF7_tstep_annotated_probes)
+
+x <- illuminaHumanv4ENTREZID
+length(x) # list of 48,107 of linked probes and genes
+mapped_probes <- mappedkeys(x) # Convert to a list
+xx <- as.list(x[mapped_probes]) # compare mapped probes # 22,283 elements
+if(length(xx) > 0) { 
+MCF7tstep_ENTREZIDs <-  xx[rownames(MCF7_tstep_annotated_probes)] 
+ }
+
+#add to dataframe
+MCF7_CCgenes <- MCF7_tstep_annotated_probes[,c(1:2)]
+MCF7_CCgenes$ENTREZ <- MCF7tstep_ENTREZIDs
+
+#make copy without NULL ENTREZIDs
+MCF7_CCgenes <- MCF7_CCgenes[MCF7_CCgenes$ENTREZ!="NULL",]  #167 genes left
+MCF7tstep_ENTREZIDs <- MCF7_CCgenes$ENTREZ
+MCF7tstep_ENTREZIDs <- noquote(MCF7tstep_ENTREZIDs)  #3107 genes
+
+write.table(MCF7tstep_ENTREZIDs,row.names = FALSE, col.names = FALSE, quote = FALSE, "MCF7tstep_ENTREZIDs.txt")
+
+
+
+
+
+
+##### T47D #####
+Replicate <-c(rep(1,3),rep(2,3),rep(3,3),rep(4,3),rep(5,3), rep(6,2)) #T47D samples, numbered according to timepoints
+Time_hours <- c(rep(0,3), rep(4,3),rep(8,3), rep(12,3), rep(24,3), rep(48,2)) #timepoints
+Control <- c(rep(1, 3), rep(0,14)) #instead of hours0
+hours4 <- c(rep(0,3), rep(1,3), rep(0,11))
+hours8<- c(rep(0, 6), rep(1,3), rep(0,8))
+hours12 <- c(rep(0,9), rep(1,3), rep(0,5))
+hours24 <- c(rep(0,12), rep(1,3), rep(0,2))
+hours48 <-  c(rep(0,15), rep(1,2))
+
+#renaming column names in eset4 to be sample names instead of accession numbers
+sampleeset4 <- eset4
+colnames(sampleeset4) <- CLs_PDX$Sample
+T47D_eset <- sampleeset4[,33:49] #eset with CAMA1 samples only, columns named after samples. 
+
+T47D_design <- cbind(Time_hours, Replicate, Control, hours4, hours8, hours12, hours24, hours48) #make the design
+rownames(T47D_design) <- colnames(T47D_eset) #rownames of design must be the same as the column names as T47D_eset4, which are sample names
+
+
+T47D_edesign <- make.design.matrix(T47D_design, degree = 1) #degree = 1 for linear regression
+
+T47D_edesign$groups.vector #show assignment of regression variables to experimental groups
+
+T47D_fit <- p.vector(T47D_eset, T47D_edesign, Q = 0.05, MT.adjust = "BH") #compute regression fit for each probe in the T47D samples (columns 33:49 in eset4). p value is corrected for multiple comparisons. p value is used to find F statistic, which is used to identify significant genes.  
+
+
+T47D_tstep <- T.fit(T47D_fit, step.method = "backward", alfa = 0.05) #stepwise regression to find significant variables for each gene (finds the differences between experimental groups).
+
+str(T47D_tstep$sol)#p-value of regression ANOVA, R2 and p value of the regression coefficients of variables are given (contains significant genes only)
+
+
+
+##p value vs R2
+pv_r2 <- T47D_tstep$sol[,1:2]
+T47D_pv_r2 <- na.omit(pv_r2)  #p and r2 columns with no NAs
+
+top5percent_pvalue3<- quantile(T47D_pv_r2[,1], probs = c(0.05))
+top5percent_r2_3<- quantile(T47D_pv_r2[,2], probs = c(0.95))
+
+
+png(file="volcano_T47Dmasigpro48h.png", width=1000, height=1000, units="px")
+par(mar=c(5,6,4,1.6)+.7)
+plot(T47D_pv_r2[,2],-log10(T47D_pv_r2[,1]), main="Differentially expressed genes in T47D cell line", xlab="R-squared", ylab="-log10(BH P value)", cex=2,cex.main=2.4, cex.axis=2, cex.lab=2.2, pch=21, col= "black", bg= ifelse(T47D_pv_r2[,1] < top5percent_pvalue3 & T47D_pv_r2[,2] > top5percent_r2_3,'coral1', 'gray90'),xlim = c(0,1), ylim = c(0,22)) + grid() #used to be 12  #coloured based on p-value - if P value in MCF7_tstep$sol is less than p value cut off and higher than r2 cut off, then that point is red.
+abline(h= -log10(top5percent_pvalue3), col="dodgerblue3")
+abline(v = top5percent_r2_3, col = "dodgerblue3")
+dev.off()
+
+##ggplot version of pvalue/r2 cut off graph
+pv_r2_ggplot_T47D <- T47D_tstep$sol %>%
+  mutate(DE = T47D_tstep$sol[,1] < top5percent_pvalue3 & T47D_tstep$sol[,2] > top5percent_r2_3) %>%
+  ggplot(aes(x = T47D_tstep$sol[,2], y = -log10(T47D_tstep$sol[,1]),  colour = DE)) +
+  geom_point(aes(colour = DE), alpha = 0.5, size = 6) +
+  scale_colour_manual(values = c("grey57", "salmon")) +
+  lims(x = c(0,1), y = c(0,25)) +
+  labs(x= "R-squared",y = "-log10(BH p value)", title = "Identification of extreme probes in T47D cell line") +
+  theme_bw()+
+  theme(legend.position = "none", 
+        plot.title = element_text(size= 40, hjust = 0.5),
+        axis.title = element_text(size =35),
+        axis.text = element_text(size = 30, colour = "grey32"),
+        plot.tag = element_text(size = 40)) +
+  geom_text(x= (top5percent_r2_3 - 0.1), y=0, label="r2 = 0.963", size = 12, colour = "steelblue3") +
+  geom_text(x= 0.25, y= (-log10(top5percent_pvalue3) + 0.5), label="p value = -log10(1.815e-08)", size = 12, colour = "steelblue3") +
+  geom_vline(xintercept= top5percent_r2_3, color = "steelblue3", size=0.7) +
+  geom_hline(yintercept = -log10(top5percent_pvalue3), , colour = "steelblue3", size = 0.7)
+      
+png(pv_r2_ggplot_T47D, file = "pvalue_r2_ggplot_T47D.png", width = 1000, height = 1000, unit = "px")
+pv_r2_ggplot_T47D
+dev.off()
+
+
+
+#annotate probes 
+library(illuminaHumanv4.db) #34k probes in eset2
+info <- select(illuminaHumanv4.db, rownames(T47D_tstep$sol), c("SYMBOL", "GENENAME")) # 36,775 entries
+
+info_temp <- data.frame(matrix( rep(0, length(info$PROBEID)), nrow=length(info$PROBEID), ncol=2))# temp data frame has 36,775 entries
+colnames(info_temp) <- c("SYMBOL", "GENENAME")
+str(info_temp)
+for (i in 1:length( rownames(T47D_tstep$sol) ) ) { # all 34k probes	
+rownames(info_temp)[i] <- rownames(T47D_tstep$sol)[i] 	
+info_temp[i,1] <-  select(illuminaHumanv4.db, rownames(T47D_tstep$sol)[i], c("SYMBOL"))[2]	
+info_temp[i,2] <-  select(illuminaHumanv4.db, rownames(T47D_tstep$sol)[i], c("GENENAME"))[2]
+} # end for 
+# now check it worked
+head(info_temp) # 1:1 mapping message not important
+str(info_temp)  # 36,775 rows for each unique gene
+
+T47D_tstep_annotated_probes <- info_temp
+#write.table(T47D_tstep_annotated_probes, file="T47D_tstep_annotated_probes.txt", sep="\t")
+
+##import the file
+#T47D_tstep_annotated_probes<- read.delim("C:/Users/laure/OneDrive/Documents/4th Year/4th year semester 2/BE488 Research Project/T47D_tstep_annotated_probes.txt", header = TRUE, sep = "\t")
+#dim(T47D_tstep_annotated_probes) #6,161 probes
+#remove duplicates and 0s. 
+T47D_tstep_annotated_probes <- distinct(T47D_tstep_annotated_probes, .keep_all = TRUE)
+T47D_tstep_annotated_probes[T47D_tstep_annotated_probes==0] <- NA
+T47D_tstep_annotated_probes <- na.omit(T47D_tstep_annotated_probes)
+
+#T47D_tstep_annotated_probes<- read.delim("C:/Users/laure/OneDrive/Documents/4th Year/4th year semester 2/BE488 Research Project/T47D_tstep_annotated_probes.txt", header = TRUE, sep = "\t") #import again bc then i need to use it to filter thru T47D_tstep$so to be able to get all extreme probes. 
+
+most_significant_T47D <- dplyr::filter(T47D_tstep$sol, T47D_tstep$sol[,1] < top5percent_pvalue3 & T47D_tstep$sol[,2] > top5percent_r2_3) #179 probes
+
+# T47D - linking genes to the p-value and r2 value of most significant probes 
+common3 <- intersect(rownames(most_significant_T47D), rownames(T47D_tstep_annotated_probes)) #get probe names of most significant probes. 
+link3 <- subset(T47D_tstep_annotated_probes, rownames(T47D_tstep_annotated_probes) %in% common3) #get the pvalue and r2 for these most significant probes
+linking_T47D <- cbind(most_significant_T47D[,1:2], link3) #make data frame containing the gene name and symbol with p and R2 value
+
+linking_T47D <- na.omit(linking_T47D) #was 179, removed NAs now its 173
+
+linking_T47D <- linking_T47D %>% distinct(linking_T47D[,3], .keep_all = TRUE) #removed duplicates, now there's 171 genes
+
+linking_T47D <- linking_T47D[,-5]
+
+#write.table(format(linking_T47D, digits = 3), file="linking_T47D.txt", sep="\t")
+
+
+#annotate linking_MCF7 for entrez ids of extreme genes.
+#getting entrezids: 
+x <- illuminaHumanv4ENTREZID
+length(x) # list of 48,107 of linked probes and genes
+mapped_probes <- mappedkeys(x) # Convert to a list
+xx <- as.list(x[mapped_probes]) # compare mapped probes # 22,283 elements
+if(length(xx) > 0) { 
+T47D_ENTREZIDs <-  xx[rownames(linking_T47D)] 
+ }
+
+#add to dataframe
+linking_T47D$ENTREZ <- T47D_ENTREZIDs
+
+#make copy without NULL ENTREZIDs
+linking_T47D <- linking_T47D[linking_T47D$ENTREZ!="NULL",]  #167 genes left
+ENTREZIDs_T47D <- linking_T47D$ENTREZ
+ENTREZIDs_T47D <- noquote(ENTREZIDs_T47D)
+
+write.table(ENTREZIDs_T47D,row.names = FALSE, col.names = FALSE, quote = FALSE, "ENTREZIDs_T47D.txt")
+
+
+#annotate to get ENTREZ IDs of all genes in tstep (all genes with consistent changes in expression over time)
+##import the file
+#T47D_tstep_annotated_probes<- read.delim("C:/Users/laure/OneDrive/Documents/4th Year/4th year semester 2/BE488 Research Project/T47D_tstep_annotated_probes.txt", header = TRUE, sep = "\t")
+#dim(T47D_tstep_annotated_probes) #6,161 probes
+#remove duplicates and 0s. 
+T47D_tstep_annotated_probes <- distinct(T47D_tstep_annotated_probes, .keep_all = TRUE)
+T47D_tstep_annotated_probes[T47D_tstep_annotated_probes==0] <- NA
+T47D_tstep_annotated_probes <- na.omit(T47D_tstep_annotated_probes)
+
+x <- illuminaHumanv4ENTREZID
+length(x) # list of 48,107 of linked probes and genes
+mapped_probes <- mappedkeys(x) # Convert to a list
+xx <- as.list(x[mapped_probes]) # compare mapped probes # 22,283 elements
+if(length(xx) > 0) { 
+T47Dtstep_ENTREZIDs <-  xx[rownames(T47D_tstep_annotated_probes)] 
+ }
+
+#add to dataframe
+T47D_CCgenes <- T47D_tstep_annotated_probes[,c(1:2)]
+T47D_CCgenes$ENTREZ <- T47Dtstep_ENTREZIDs
+
+#make copy without NULL ENTREZIDs
+T47D_CCgenes <- T47D_CCgenes[T47D_CCgenes$ENTREZ!="NULL",]  #167 genes left
+T47Dtstep_ENTREZIDs <- T47D_CCgenes$ENTREZ
+T47Dtstep_ENTREZIDs <- noquote(T47Dtstep_ENTREZIDs)
+
+write.table(T47Dtstep_ENTREZIDs,row.names = FALSE, col.names = FALSE, quote = FALSE, "T47Dtstep_ENTREZIDs.txt")
+
+
+
+
+
+
+
+####What genes are common to all 3 cell lines? PLOT4
+
+#Venn diagram - all significant genes in tstep (aside from NAs and 0s.)
+x <- list(
+  all_significant_genes_CAMA1 = CAMA1_tstep_annotated_probes[,1], 
+  all_significant_genes_MCF7  = MCF7_tstep_annotated_probes[,1], 
+  all_significant_genes_T47D  = T47D_tstep_annotated_probes[,1]
+  ) #venn diagrams dont contain duplicates
+
+#use this list to make a venn diagram
+png(file="Venn_masigpro_cell_lines2.png", width=1000, height=1000, units="px")
+ggvenn(x, fill_color = c("coral1", "cadetblue2", "palegreen3"), fill_alpha = 0.7, stroke_size = 1, set_name_size = 9, text_size = 8)
+dev.off() 
+
+
+#plot5 -- most significant genes only ( those in bottom 5% of pvalues and top 5% of r2)
+x <- list(
+  CAMA1_sig_genes = linking_CAMA1[,3], 
+  MCF7_sig_genes  = linking_MCF7[,3], 
+  T47D_sig_genes  = linking_T47D[,3]
+  )
+
+#use this list to make a venn diagram
+png(file="Venn_masigpro_cell_lines3.png", width=1000, height=1000, units="px")
+ggvenn(x, fill_color = c("coral1", "cadetblue2", "palegreen3"), fill_alpha = 0.7, stroke_size = 1, set_name_size = 9, text_size = 8)
+dev.off() 
+
+
+
+#### make a table of genes that are significant in all 3
+
+#intersect(intersect(table1$ID, table2$ID), table3$ID)
+#all annotated genes
+common <- intersect(intersect(CAMA1_tstep_annotated_probes[,1], MCF7_tstep_annotated_probes[,1]), T47D_tstep_annotated_probes[,1]) #list of probes common to all 3. #important.
+
+#
+extreme_common <- intersect(intersect(linking_CAMA1[,3:4], linking_MCF7[,3:4]), linking_T47D[,3:4]) #list of genes common to all 3. 
+
+extreme_common1 <- intersect(linking_CAMA1[,3:4], linking_MCF7[,3:4])
+
+extreme_common2 <- intersect(linking_CAMA1[,3:4], linking_T47D[,3:4])
+
+extreme_common3 <- intersect(linking_MCF7[,3:4], linking_T47D[,3:4])
+
+#making table of extreme genes in intersects
+Intersection <- c(rep("CAMA1/MCF7", nrow(extreme_common1)), rep("CAMA1/T47D",nrow(extreme_common2)), rep("MCF7/T47D", nrow(extreme_common3)), rep("CAMA1/MCF7/T47D", nrow(extreme_common)))
+
+Intersection <- cbind(Intersection, c(extreme_common1[,1], extreme_common2[,1], extreme_common3[,1], extreme_common[,1]))
+
+Intersection <- cbind(Intersection, c(extreme_common1[,2], extreme_common2[,2], extreme_common3[,2], extreme_common[,2]))
+
+rownames(Intersection) <- c(rownames(extreme_common1), rownames(extreme_common2), rownames(extreme_common3), rownames(extreme_common))
+
+#remove these rows so common genes arent duplicated
+Intersection <- Intersection[-c(3, 4, 5,8,10,11,22,33,34), ] 
+write.table(Intersection,file="Intersection_genes_masigpro.txt", sep="\t")
+
+#annotate Intersection to get ENTREZ IDs for DAVID ontology
+x <- illuminaHumanv4ENTREZID
+length(x) # list of 48,107 of linked probes and genes
+mapped_probes <- mappedkeys(x) # Convert to a list
+xx <- as.list(x[mapped_probes]) # compare mapped probes # 22,283 elements
+if(length(xx) > 0) { 
+Intersection_ENTREZIDs <-  xx[rownames(Intersection)] 
+ }
+
+#add to dataframe
+Intersection <- cbind(Intersection,Intersection_ENTREZIDs)
+Intersection <- as.data.frame(Intersection)
+
+Intersection <- Intersection[Intersection$Intersection_ENTREZ!="NULL",]  #13,376 left
+
+Intersection_ENTREZIDs <- Intersection$Intersection_ENTREZ
+Intersection_ENTREZIDs <- noquote(Intersection_ENTREZIDs)
+
+write.table(Intersection_ENTREZIDs,row.names = FALSE, col.names = FALSE, quote = FALSE, "Intersection_ENTREZIDs.txt")
+
+
+
+
+#try to make just one plot for all three cell lines - CTSV
+CTSV_probe <- c(rownames(filter(extreme_common1, SYMBOL == "CTSV")), rownames(filter(extreme_common2, SYMBOL == "CTSV")), rownames(filter(extreme_common3, SYMBOL == "CTSV")))
+
+#try getting means for each time point and plotting those for each cell line
+means1 <- c(mean(CAMA1_eset[CTSV_probe[1],1:2]), mean(CAMA1_eset[CTSV_probe[1],3:5]), mean(CAMA1_eset[CTSV_probe[1],6:8]), mean(CAMA1_eset[CTSV_probe[1],9:11]), mean(CAMA1_eset[CTSV_probe[1],12:13]), mean(CAMA1_eset[CTSV_probe[1],14:15]))
+
+means2 <- c(mean(MCF7_eset[CTSV_probe[1],1:3]), mean(MCF7_eset[CTSV_probe[1],4:6]), mean(MCF7_eset[CTSV_probe[1],7:9]), mean(MCF7_eset[CTSV_probe[1],10:12]), mean(MCF7_eset[CTSV_probe[1],13:15]), mean(MCF7_eset[CTSV_probe[1],16:17]))
+
+means3 <- c(mean(T47D_eset[CTSV_probe[1],1:3]), mean(T47D_eset[CTSV_probe[1],4:6]), mean(T47D_eset[CTSV_probe[1],7:9]), mean(T47D_eset[CTSV_probe[1],10:12]), mean(T47D_eset[CTSV_probe[1],13:15]), mean(T47D_eset[CTSV_probe[1],16:17]))
+                  
+
+#dataframe for plot
+together <- data.frame(means = c(means1, means2, means3), time = rep(c(0, 4, 8, 12, 24, 48),3), Cell_line = c(rep("CAMA1",6), rep("MCF7",6), rep("T47D",6)))
+
+
+#plot. 
+CTSV_oneplot <- ggplot(together, aes(x =time, y = means, color = Cell_line, group = Cell_line)) +
+geom_point(size = 2)+
+geom_line(aes(col = Cell_line),size =1) +
+labs(x = "Time", y = "Mean expression", title = "CTSV expression") +
+scale_y_continuous(limits = c(7.5,12.5), breaks = seq(7.5, 12.5, by = 1)) +
+theme(plot.title = element_text(size=40, hjust = 0.5, face = "bold"),
+      legend.title = element_text(size = (16)),
+      legend.text = element_text(size = (15)),
+      axis.title = element_text(size = (35)),
+      axis.text = element_text(size = (30), colour = "grey32"),
+      legend.position = "none")+
+      scale_x_continuous("Time (hours)", breaks = c(0,4,8,12,24,48)) +
+      guides(color=guide_legend("Cell line"))+
+      scale_colour_manual(values = three_colours)
+
+
+png(CTSV_oneplot, file = "CTSV_plot_means.png", width = 500, height = 650, unit = "px")
+CTSV_oneplot
+dev.off()
+
+
+
+
+
+#try to make just one plot - PTTG1
+PTTG1_probe <- c(rownames(filter(extreme_common1, SYMBOL == "PTTG1")), rownames(filter(extreme_common2, SYMBOL == "PTTG1")), rownames(filter(extreme_common3, SYMBOL == "PTTG1")))
+
+#try getting means for each time point and plotting those for each cell line
+means1 <- c(mean(CAMA1_eset[PTTG1_probe[1],1:2]), mean(CAMA1_eset[PTTG1_probe[1],3:5]), mean(CAMA1_eset[PTTG1_probe[1],6:8]), mean(CAMA1_eset[PTTG1_probe[1],9:11]), mean(CAMA1_eset[PTTG1_probe[1],12:13]), mean(CAMA1_eset[PTTG1_probe[1],14:15]))
+
+means2 <- c(mean(MCF7_eset[PTTG1_probe[1],1:3]), mean(MCF7_eset[PTTG1_probe[1],4:6]), mean(MCF7_eset[PTTG1_probe[1],7:9]), mean(MCF7_eset[PTTG1_probe[1],10:12]), mean(MCF7_eset[PTTG1_probe[1],13:15]), mean(MCF7_eset[PTTG1_probe[1],16:17]))
+
+means3 <- c(mean(T47D_eset[PTTG1_probe[1],1:3]), mean(T47D_eset[PTTG1_probe[1],4:6]), mean(T47D_eset[PTTG1_probe[1],7:9]), mean(T47D_eset[PTTG1_probe[1],10:12]), mean(T47D_eset[PTTG1_probe[1],13:15]), mean(T47D_eset[PTTG1_probe[1],16:17]))
+                
+
+#dataframe for plot
+together <- data.frame(means = c(means1, means2, means3), time = rep(c(0, 4, 8, 12, 24, 48),3), Cell_line = c(rep("CAMA1",6), rep("MCF7",6), rep("T47D",6)))
+
+#plot. no legend will work
+PTTG1_oneplot <- ggplot(together, aes(x =time, y = means, color = Cell_line, group = Cell_line)) +
+geom_point(size = 2)+
+geom_line(aes(col = Cell_line),size =1) +
+labs(x = "Time", y = "Mean expression", title = "PTTG1 expression") +
+scale_y_continuous(limits = c(7.5,12.5), breaks = seq(7.5, 12.5, by = 1)) +
+theme(plot.title = element_text(size=40, hjust = 0.5, face = "bold"),
+      legend.title = element_text(size = (16)),
+      legend.text = element_text(size = (15)),
+      axis.title = element_text(size = (35)),
+      axis.text = element_text(size = (30), colour = "grey32"),
+      legend.position = "none")+
+      scale_x_continuous("Time (hours)", breaks = c(0,4,8, 12,24,48))+            
+      scale_colour_manual(values = three_colours)
+
+
+png(PTTG1_oneplot, file = "PTTG1_plot_means.png", width = 500, height = 650, unit = "px")
+PTTG1_oneplot
+dev.off()
+
+
+#try to make just one plot - PTTG3P
+PTTG3P_probe <- c(rownames(filter(extreme_common1, SYMBOL == "PTTG3P")), rownames(filter(extreme_common2, SYMBOL == "PTTG3P")), rownames(filter(extreme_common3, SYMBOL == "PTTG3P")))
+
+#try getting means for each time point and plotting those for each cell line
+means1 <- c(mean(CAMA1_eset[PTTG3P_probe[1],1:2]), mean(CAMA1_eset[PTTG3P_probe[1],3:5]), mean(CAMA1_eset[PTTG3P_probe[1],6:8]), mean(CAMA1_eset[PTTG3P_probe[1],9:11]), mean(CAMA1_eset[PTTG3P_probe[1],12:13]), mean(CAMA1_eset[PTTG3P_probe[1],14:15]))
+
+means2 <- c(mean(MCF7_eset[PTTG3P_probe[1],1:3]), mean(MCF7_eset[PTTG3P_probe[1],4:6]), mean(MCF7_eset[PTTG3P_probe[1],7:9]), mean(MCF7_eset[PTTG3P_probe[1],10:12]), mean(MCF7_eset[PTTG3P_probe[1],13:15]), mean(MCF7_eset[PTTG3P_probe[1],16:17]))
+
+means3 <- c(mean(T47D_eset[PTTG3P_probe[1],1:3]), mean(T47D_eset[PTTG3P_probe[1],4:6]), mean(T47D_eset[PTTG3P_probe[1],7:9]), mean(T47D_eset[PTTG3P_probe[1],10:12]), mean(T47D_eset[PTTG3P_probe[1],13:15]), mean(T47D_eset[PTTG3P_probe[1],16:17]))
+                  
+
+#dataframe for plot
+together <- data.frame(means = c(means1, means2, means3), time = rep(c(0, 4, 8, 12, 24, 48),3), Cell_line = c(rep("CAMA1",6), rep("MCF7",6), rep("T47D",6)))
+
+#plot. 
+PTTG3P_oneplot <- ggplot(together, aes(x =time, y = means, color = Cell_line, group = Cell_line)) +
+geom_point(size = 2)+
+geom_line(aes(col = Cell_line),size =1) +
+labs(x = "Time", y = "Mean expression", title = "PTTG3P expression") +
+scale_y_continuous(limits = c(7.5,12.5), breaks = seq(7.5, 12.5, by = 1))+
+theme(plot.title = element_text(size=40, hjust = 0.5, face = "bold"),
+      legend.title = element_text(size = (16)),
+      legend.text = element_text(size = (15)),
+      axis.title = element_text(size = (35)),
+      axis.text = element_text(size = (30), colour = "grey32"),
+      legend.position = "none")+
+      scale_x_continuous("Time (hours)", breaks = c(0,4,8, 12,24,48))+
+      scale_colour_manual(values = three_colours)
+
+png(PTTG3P_oneplot, file = "PTTG3P_plot_means.png", width = 500, height = 650, unit = "px")
+PTTG3P_oneplot
+dev.off()
+
+
+
+
+
+####PLOTS OF GENES COMMON BETWEEN MCF7 AND T47D
+#try to make just one plot - PBK
+PBK_probe <- c(rownames(filter(extreme_common2, SYMBOL == "PBK")), rownames(filter(extreme_common3, SYMBOL == "PBK")))
+
+#try getting means for each time point and plotting those for each cell line
+means2 <- c(mean(MCF7_eset[PBK_probe[1],1:3]), mean(MCF7_eset[PBK_probe[1],4:6]), mean(MCF7_eset[PBK_probe[1],7:9]), mean(MCF7_eset[PBK_probe[1],10:12]), mean(MCF7_eset[PBK_probe[1],13:15]), mean(MCF7_eset[PBK_probe[1],16:17]))
+
+means3 <- c(mean(T47D_eset[PBK_probe[1],1:3]), mean(T47D_eset[PBK_probe[1],4:6]), mean(T47D_eset[PBK_probe[1],7:9]), mean(T47D_eset[PBK_probe[1],10:12]), mean(T47D_eset[PBK_probe[1],13:15]), mean(T47D_eset[PBK_probe[1],16:17]))
+                  
+
+#dataframe for plot
+together <- data.frame(means = c(means2, means3), time = rep(c(0, 4, 8, 12, 24, 48),2), Cell_line = c(rep("MCF7",6), rep("T47D",6)))
+
+
+#plot. #get colours to be same as last plots. 
+PBK_oneplot <- ggplot(together, aes(x =time, y = means, colour = Cell_line, group = Cell_line)) +
+geom_point(size = 2) +
+geom_line(aes(col = Cell_line),size =1) +
+labs(x = "Time", y = "Mean expression", title = "PBK expression") +
+scale_y_continuous(limits = c(6.5,12.5), breaks = seq(6.5, 12.5, by = 1)) +
+theme(plot.title = element_text(size=40, hjust = 0.5, face = "bold"),
+      legend.title = element_text(size = (16)),
+      legend.text = element_text(size = (15)),
+      axis.title = element_text(size = (35)),
+      axis.text = element_text(size = (30), colour = "grey32"))+
+      scale_x_continuous("Time (hours)", breaks = c(0,4,8,12,24,48)) +
+      guides(color=guide_legend("Cell line"))
+
+two_colours <- c("MCF7" = "#4DB6D0", "T47D" = "palegreen3")
+PBK_oneplot <- PBK_oneplot + scale_colour_manual(values = two_colours)
+
+
+#try to make just one plot - CCNB2
+CCNB2_probe <- c(rownames(filter(extreme_common2, SYMBOL == "CCNB2")), rownames(filter(extreme_common3, SYMBOL == "CCNB2")))
+
+#try getting means for each time point and plotting those for each cell line
+means2 <- c(mean(MCF7_eset[CCNB2_probe[1],1:3]), mean(MCF7_eset[CCNB2_probe[1],4:6]), mean(MCF7_eset[CCNB2_probe[1],7:9]), mean(MCF7_eset[CCNB2_probe[1],10:12]), mean(MCF7_eset[CCNB2_probe[1],13:15]), mean(MCF7_eset[CCNB2_probe[1],16:17]))
+
+means3 <- c(mean(T47D_eset[CCNB2_probe[1],1:3]), mean(T47D_eset[CCNB2_probe[1],4:6]), mean(T47D_eset[CCNB2_probe[1],7:9]), mean(T47D_eset[CCNB2_probe[1],10:12]), mean(T47D_eset[CCNB2_probe[1],13:15]), mean(T47D_eset[CCNB2_probe[1],16:17]))
+                  
+
+#dataframe for plot
+together <- data.frame(means = c(means2, means3), time = rep(c(0, 4, 8, 12, 24, 48),2), Cell_line = c(rep("MCF7",6), rep("T47D",6)))
+
+
+#plot. #get colours to be same as last plots. 
+CCNB2_oneplot <- ggplot(together, aes(x =time, y = means, colour = Cell_line, group = Cell_line)) +
+geom_point(size = 2) +
+geom_line(aes(col = Cell_line),size =1) +
+labs(x = "Time", y = "Mean expression", title = "CCNB2 expression") +
+scale_y_continuous(limits = c(6.5,12.5), breaks = seq(6.5, 12.5, by = 1)) +
+theme(plot.title = element_text(size=40, hjust = 0.5, face = "bold"),
+      legend.title = element_text(size = (16)),
+      legend.text = element_text(size = (15)),
+      axis.title = element_text(size = (35)),
+      axis.text = element_text(size = (30), colour = "grey32"))+
+      scale_x_continuous("Time (hours)", breaks = c(0,4,8,12,24,48)) +
+      guides(color=guide_legend("Cell line"))
+
+two_colours <- c("MCF7" = "#4DB6D0", "T47D" = "palegreen3")
+CCNB2_oneplot <- CCNB2_oneplot + scale_colour_manual(values = two_colours)
+
+
+
+#try to make just one plot - CDCA2
+CDCA2_probe <- c(rownames(filter(extreme_common2, SYMBOL == "CDCA2")), rownames(filter(extreme_common3, SYMBOL == "CDCA2")))
+
+#try getting means for each time point and plotting those for each cell line
+means2 <- c(mean(MCF7_eset[CDCA2_probe[1],1:3]), mean(MCF7_eset[CDCA2_probe[1],4:6]), mean(MCF7_eset[CDCA2_probe[1],7:9]), mean(MCF7_eset[CDCA2_probe[1],10:12]), mean(MCF7_eset[CDCA2_probe[1],13:15]), mean(MCF7_eset[CDCA2_probe[1],16:17]))
+
+means3 <- c(mean(T47D_eset[CDCA2_probe[1],1:3]), mean(T47D_eset[CDCA2_probe[1],4:6]), mean(T47D_eset[CDCA2_probe[1],7:9]), mean(T47D_eset[CDCA2_probe[1],10:12]), mean(T47D_eset[CDCA2_probe[1],13:15]), mean(T47D_eset[CDCA2_probe[1],16:17]))
+                  
+
+#dataframe for plot
+together <- data.frame(means = c(means2, means3), time = rep(c(0, 4, 8, 12, 24, 48),2), Cell_line = c(rep("MCF7",6), rep("T47D",6)))
+
+
+#plot. #get colours to be same as last plots. 
+CDCA2_oneplot <- ggplot(together, aes(x =time, y = means, colour = Cell_line, group = Cell_line)) +
+geom_point(size = 2) +
+geom_line(aes(col = Cell_line),size =1) +
+labs(x = "Time", y = "Mean expression", title = "CDCA2 expression") +
+scale_y_continuous(limits = c(6.5,12.5), breaks = seq(6.5, 12.5, by = 1)) +
+theme(plot.title = element_text(size=40, hjust = 0.5, face = "bold"),
+      legend.title = element_text(size = (16)),
+      legend.text = element_text(size = (15)),
+      axis.title = element_text(size = (35)),
+      axis.text = element_text(size = (30), colour = "grey32"),
+      legend.position = "none")+
+      scale_x_continuous("Time (hours)", breaks = c(0,4,8,12,24,48)) +
+      guides(color=guide_legend("Cell line"))
+
+two_colours <- c("MCF7" = "#4DB6D0", "T47D" = "palegreen3")
+CDCA2_oneplot <- CDCA2_oneplot + scale_colour_manual(values = two_colours)
+
+
+#try to make just one plot - CDCA8
+CDCA8_probe <- c(rownames(filter(extreme_common2, SYMBOL == "CDCA8")), rownames(filter(extreme_common3, SYMBOL == "CDCA8")))
+
+#try getting means for each time point and plotting those for each cell line
+means2 <- c(mean(MCF7_eset[CDCA8_probe[1],1:3]), mean(MCF7_eset[CDCA8_probe[1],4:6]), mean(MCF7_eset[CDCA8_probe[1],7:9]), mean(MCF7_eset[CDCA8_probe[1],10:12]), mean(MCF7_eset[CDCA8_probe[1],13:15]), mean(MCF7_eset[CDCA8_probe[1],16:17]))
+
+means3 <- c(mean(T47D_eset[CDCA8_probe[1],1:3]), mean(T47D_eset[CDCA8_probe[1],4:6]), mean(T47D_eset[CDCA8_probe[1],7:9]), mean(T47D_eset[CDCA8_probe[1],10:12]), mean(T47D_eset[CDCA8_probe[1],13:15]), mean(T47D_eset[CDCA8_probe[1],16:17]))
+                  
+
+#dataframe for plot
+together <- data.frame(means = c(means2, means3), time = rep(c(0, 4, 8, 12, 24, 48),2), Cell_line = c(rep("MCF7",6), rep("T47D",6)))
+
+
+#plot. #get colours to be same as last plots. 
+CDCA8_oneplot <- ggplot(together, aes(x =time, y = means, colour = Cell_line, group = Cell_line)) +
+geom_point(size = 3) +
+geom_line(aes(col = Cell_line),size =1) +
+labs(x = "Time", y = "Mean expression", title = "CDCA8 expression") +
+scale_y_continuous(limits = c(6.5,12.5), breaks = seq(6.5, 12.5, by = 1)) +
+theme(plot.title = element_text(size=40, hjust = 0.5, face = "bold"),
+      legend.title = element_text(size = (16)),
+      legend.text = element_text(size = (15)),
+      axis.title = element_text(size = (35)),
+      axis.text = element_text(size = (30), colour = "grey32"),
+      legend.position = "none")+
+      scale_x_continuous("Time (hours)", breaks = c(0,4,8,12,24,48)) +
+      guides(color=guide_legend("Cell line"))
+
+two_colours <- c("MCF7" = "#4DB6D0", "T47D" = "palegreen3")
+CDCA8_oneplot <- CDCA8_oneplot + scale_colour_manual(values = two_colours)
+
+png(CDCA8_oneplot, file = "CDCA8_plot_means.png", width = 500, height = 650, unit = "px")
+CDCA8_oneplot
+dev.off()
+
+
+
+
+####plots for genes from DAVID ontology
+AURKB_probe <- c(rownames(filter(extreme_common2, SYMBOL == "AURKB")), rownames(filter(extreme_common3, SYMBOL == "AURKB")))
+
+#try getting means for each time point and plotting those for each cell line
+means2 <- c(mean(MCF7_eset[AURKB_probe[1],1:3]), mean(MCF7_eset[AURKB_probe[1],4:6]), mean(MCF7_eset[AURKB_probe[1],7:9]), mean(MCF7_eset[AURKB_probe[1],10:12]), mean(MCF7_eset[AURKB_probe[1],13:15]), mean(MCF7_eset[AURKB_probe[1],16:17]))
+
+means3 <- c(mean(T47D_eset[AURKB_probe[1],1:3]), mean(T47D_eset[AURKB_probe[1],4:6]), mean(T47D_eset[AURKB_probe[1],7:9]), mean(T47D_eset[AURKB_probe[1],10:12]), mean(T47D_eset[AURKB_probe[1],13:15]), mean(T47D_eset[AURKB_probe[1],16:17]))
+                  
+
+#dataframe for plot
+together <- data.frame(means = c(means2, means3), time = rep(c(0, 4, 8, 12, 24, 48),2), Cell_line = c(rep("MCF7",6), rep("T47D",6)))
+
+
+#plot. #get colours to be same as last plots. 
+AURKB_oneplot <- ggplot(together, aes(x =time, y = means, colour = Cell_line, group = Cell_line)) +
+geom_point(size = 2) +
+geom_line(aes(col = Cell_line),size =1) +
+labs(x = "Time", y = "Mean expression", title = "AURKB expression") +
+scale_y_continuous(limits = c(6.5,12.5), breaks = seq(6.5, 12.5, by = 1)) +
+theme(plot.title = element_text(size=40, hjust = 0.5, face = "bold"),
+      legend.title = element_text(size = (16)),
+      legend.text = element_text(size = (15)),
+      axis.title = element_text(size = (35)),
+      axis.text = element_text(size = (30), colour = "grey32"),
+      legend.position = "none")+
+      scale_x_continuous("Time (hours)", breaks = c(0,4,8,12,24,48)) +
+      guides(color=guide_legend("Cell line"))
+
+two_colours <- c("MCF7" = "#4DB6D0", "T47D" = "palegreen3")
+AURKB_oneplot <- AURKB_oneplot + scale_colour_manual(values = two_colours)
+
+png(AURKB_oneplot, file = "AURKB_plot_means.png", width = 500, height = 650, unit = "px")
+AURKB_oneplot
+dev.off()
+
+
+
+
+##BIRC5
+BIRC5_probe <- c(rownames(filter(extreme_common2, SYMBOL == "BIRC5")), rownames(filter(extreme_common3, SYMBOL == "BIRC5")))
+
+#try getting means for each time point and plotting those for each cell line
+means2 <- c(mean(MCF7_eset[BIRC5_probe[1],1:3]), mean(MCF7_eset[BIRC5_probe[1],4:6]), mean(MCF7_eset[BIRC5_probe[1],7:9]), mean(MCF7_eset[BIRC5_probe[1],10:12]), mean(MCF7_eset[BIRC5_probe[1],13:15]), mean(MCF7_eset[BIRC5_probe[1],16:17]))
+
+means3 <- c(mean(T47D_eset[BIRC5_probe[1],1:3]), mean(T47D_eset[BIRC5_probe[1],4:6]), mean(T47D_eset[BIRC5_probe[1],7:9]), mean(T47D_eset[BIRC5_probe[1],10:12]), mean(T47D_eset[BIRC5_probe[1],13:15]), mean(T47D_eset[BIRC5_probe[1],16:17]))
+                  
+
+#dataframe for plot
+together <- data.frame(means = c(means2, means3), time = rep(c(0, 4, 8, 12, 24, 48),2), Cell_line = c(rep("MCF7",6), rep("T47D",6)))
+
+
+#plot. #get colours to be same as last plots. 
+BIRC5_oneplot <- ggplot(together, aes(x =time, y = means, colour = Cell_line, group = Cell_line)) +
+geom_point(size = 2) +
+geom_line(aes(col = Cell_line),size =1) +
+labs(x = "Time", y = "Mean expression", title = "BIRC5 expression") +
+scale_y_continuous(limits = c(6.5,12.5), breaks = seq(6.5, 12.5, by = 1)) +
+theme(plot.title = element_text(size=40, hjust = 0.5, face = "bold"),
+      legend.title = element_text(size = (16)),
+      legend.text = element_text(size = (15)),
+      axis.title = element_text(size = (35)),
+      axis.text = element_text(size = (30), colour = "grey32"),
+      legend.position = "none")+
+      scale_x_continuous("Time (hours)", breaks = c(0,4,8,12,24,48)) +
+      guides(color=guide_legend("Cell line"))
+
+two_colours <- c("MCF7" = "#4DB6D0", "T47D" = "palegreen3")
+BIRC5_oneplot <- BIRC5_oneplot + scale_colour_manual(values = two_colours)
+
+png(BIRC5_oneplot, file = "BIRC5_plot_means.png", width = 500, height = 650, unit = "px")
+BIRC5_oneplot
+dev.off()
+
+
+
+
+
+#####MASIGPRO for compairing CELL LINES#####
+# make the design
+Replicate <-c(rep(1,15),rep(2,17),rep(3,17)) #Samples, groups according to cell line
+
+Time_hours <- c(rep(0,2), rep(4,3),rep(8,3), rep(12,3), rep(24,2), rep(48,2), rep(0,3), rep(4,3),rep(8,3), rep(12,3), rep(24,3), rep(48,2),  rep(0,3), rep(4,3),rep(8,3), rep(12,3), rep(24,3), rep(48,2))#timepoints
+
+Control <- c(rep(1, 2), rep(0,13), rep(1,3), rep(0,14), rep(1,3), rep(0,14)) #instead of hours0 #what is considered a control?
+CAMA1s <- c(rep(1,15), rep(0,34)) #these 3 groups will be compared against controls. 
+MCF7s <- c(rep(0,15), rep(1,17), rep(0,17))
+T47Ds <- c(rep(0,32), rep(1,17))
+
+
+#renaming column names in eset4 to be sample names instead of accession numbers
+sampleeset4 <- eset4[,1:49] 
+colnames(sampleeset4) <- CLs_PDX$Sample[1:49]
+
+
+CL_design <- cbind(Time_hours, Replicate, Control, CAMA1s, MCF7s, T47Ds) #make the design
+rownames(CL_design) <- colnames(sampleeset4) #rownames of design must be the same as the column names as sampleeset4, which are sample names
+
+CL_edesign <- make.design.matrix(CL_design, degree = 1) #degree = 1 for linear regression
+
+CL_fit <- p.vector(sampleeset4, CL_edesign, Q = 0.05, MT.adjust = "BH") #compute regression fit for each probe in the samples. p value is corrected for multiple comparisons. p value is used to find F statistic, which is used to identify significant genes.  
+
+CL_fit$i # returns the number of significant genes, 18,575
+head(CL_fit$SELEC) # is a matrix with the significant probes and their expression values
+
+CL_tstep <- T.fit(CL_fit, step.method = "backward", alfa = 0.05) #stepwise regression to find significant variables for each gene (finds the differences between experimental groups)
+
+#write.table(CL_tstep$sol, file="CL_tstep.txt", sep="\t")
+
+
+#CL
+pv_r2 <- CL_tstep$sol[,1:2]
+CL_pv_r2 <- na.omit(pv_r2)  #p and r2 columns with no NAs
+colnames(CL_pv_r2) <- c("pvalue", "r2")
+
+top5percent_pvalue4<- quantile(CL_pv_r2[,1], probs = c(0.05))
+top5percent_r2_4<- quantile(CL_pv_r2[,2], probs = c(0.95))
+
+png(file="volcano_CLmasigpro.png", width=1000, height=1000, units="px")
+par(mar=c(5,6,4,1.6)+.7, bg = "white")
+plot(CL_pv_r2[,2],-log10(CL_pv_r2[,1]), main="Differentially expressed genes in all cell lines", xlab="R-squared", ylab="-log10(BH P value)", cex=2.4,cex.main=2.7, cex.axis=2.4, cex.lab=2.4, pch=21, col= "black", bg= ifelse(CL_pv_r2[,1] < top5percent_pvalue4 & CL_pv_r2[,2] > top5percent_r2_4,'coral1', 'gray90'), xlim = c(0,1), ylim = c(0,22)) + grid() #can widen xlim to see more genes e.g. -15,000,15000 #coloured based on p-value - if P value in MCF7_tstep$sol is less than 1e-9, then that point is red.
+abline(h= -log10(top5percent_pvalue4), col="dodgerblue3")
+abline(v = top5percent_r2_4, col = "dodgerblue3")
+dev.off()
+
+#ggplot pv_r2 plot for global comparison
+pv_r2_ggplot_CL <- CL_tstep$sol %>%
+  mutate(DE = CL_tstep$sol[,1] < top5percent_pvalue4 & CL_tstep$sol[,2] > top5percent_r2_4) %>%
+  ggplot(aes(x = CL_tstep$sol[,2], y = -log10(CL_tstep$sol[,1]),  colour = DE)) +
+  geom_point(aes(colour = DE), alpha = 0.5, size = 6) +
+  scale_colour_manual(values = c("grey57", "salmon")) +
+  lims(x = c(0,1), y = c(0,25)) +
+  labs(x= "R-squared",y = "-log10(BH p value)", title = "Identification of extreme probes in global comparison") + #, tag = "A") +
+  theme_bw()+
+  theme(legend.position = "none", 
+        plot.title = element_text(size= 40, hjust = 0.5),
+        axis.title = element_text(size =35),
+        axis.text = element_text(size = 30, colour = "grey32"),
+        plot.tag = element_text(size = 40)) +
+  geom_text(x= (top5percent_r2_4 - 0.1), y=0, label="r2 = 0.602", size = 12, colour = "steelblue3") +
+  geom_text(x= 0.25, y= (-log10(top5percent_pvalue4) + 0.8), label="p value = -log10(1.009e-09)", size = 12, colour = "steelblue3") +
+  geom_vline(xintercept= top5percent_r2_4, color = "steelblue3", size=0.7) +
+  geom_hline(yintercept = -log10(top5percent_pvalue4), , colour = "steelblue3", size = 0.7)
+      
+png(pv_r2_ggplot_CL, file = "pvalue_r2_ggplot_CL.png", width = 1000, height = 1000, unit = "px")
+pv_r2_ggplot_CL
+dev.off()
+
+
+#annotate
+library(illuminaHumanv4.db) #34k probes in eset2
+info <- select(illuminaHumanv4.db, rownames(CL_tstep$sol), c("SYMBOL", "GENENAME")) # 36,775 entries
+
+info_temp <- data.frame(matrix( rep(0, length(info$PROBEID)), nrow=length(info$PROBEID), ncol=2))# temp data frame has 36,775 entries
+colnames(info_temp) <- c("SYMBOL", "GENENAME")
+str(info_temp)
+for (i in 1:length( rownames(CL_tstep$sol) ) ) { # all 34k probes	
+rownames(info_temp)[i] <- rownames(CL_tstep$sol)[i] 	
+info_temp[i,1] <-  select(illuminaHumanv4.db, rownames(CL_tstep$sol)[i], c("SYMBOL"))[2]	
+info_temp[i,2] <-  select(illuminaHumanv4.db, rownames(CL_tstep$sol)[i], c("GENENAME"))[2]
+} # end for 
+# now check it worked
+head(info_temp) # 1:1 mapping message not important
+str(info_temp)  # 36,775 rows for each unique gene
+
+CL_tstep_annotated_probes <- info_temp
+#write.table(CL_tstep_annotated_probes, file="CL_tstep_annotated_probes.txt", sep="\t")
+
+##import the file
+#CL_tstep_annotated_probes<- read.delim("C:/Users/laure/OneDrive/Documents/4th Year/4th year semester 2/BE488 Research Project/CL_tstep_annotated_probes.txt", header = TRUE, sep = "\t")
+#dim(CL_tstep_annotated_probes) #19,733 genes
+
+CL_tstep_annotated_probes <- distinct(CL_tstep_annotated_probes, .keep_all = TRUE) #13,704 genes
+CL_tstep_annotated_probes[CL_tstep_annotated_probes==0] <- NA
+CL_tstep_annotated_probes <- na.omit(CL_tstep_annotated_probes) #13,702 genes
+
+#CL_tstep_annotated_probes<- read.delim("C:/Users/laure/OneDrive/Documents/4th Year/4th year semester 2/BE488 Research Project/CL_tstep_annotated_probes.txt", header = TRUE, sep = "\t") #re-run so i can link genes to their p and r2 values
+
+#genes in top 5% of R2 and bottom 5% of p value
+most_significant_CL <- dplyr::filter(CL_tstep$sol, CL_tstep$sol[,1] < top5percent_pvalue4 & CL_tstep$sol[,2] > top5percent_r2_4) #821 probes
+
+# linking extreme genes to their p-values and r2 values
+common4 <- intersect(rownames(most_significant_CL), rownames(CL_tstep_annotated_probes)) #821
+link4 <- subset(CL_tstep_annotated_probes, rownames(CL_tstep_annotated_probes) %in% common4) #821
+linking_CL <- cbind(most_significant_CL[,1:2], link4)
+
+linking_CL <- na.omit(linking_CL) #remove NAs, 760 genes left
+ 
+linking_CL <- linking_CL %>% distinct(linking_CL[,3], .keep_all = TRUE) #remove duplicate genes #698 left
+
+linking_CL <- linking_CL[,-5] #remove random column which appeared when using distinct()
+
+#write.table(format(linking_CL, digits = 3), file="linking_CL.txt", sep="\t")
+
+
+#READ IN linking_CL with ENTREZ IDs. 
+#getting entrezids: 
+x <- illuminaHumanv4ENTREZID
+length(x) # list of 48,107 of linked probes and genes
+mapped_probes <- mappedkeys(x) # Convert to a list
+xx <- as.list(x[mapped_probes]) # compare mapped probes # 22,283 elements
+if(length(xx) > 0) { 
+ENTREZIDs <-  xx[rownames(linking_CL)] 
+ }
+
+#add to dataframe
+linking_CL$ENTREZ <- ENTREZIDs
+write.table(format(linking_CL, digits = 3), file="linking_CL.txt", sep="\t")
+
+#read in
+linking_CL <- read.delim("C:/Users/laure/OneDrive/Documents/4th Year/4th year semester 2/BE488 Research Project/linking_CL.txt", header = TRUE, sep = "\t") #re-run so i can link genes to their p and r2 values
+
+#make copy without NULL ENTREZIDs
+linking_CL[linking_CL=="NULL"] <- NA #convet NULL to NA #698 genes
+linking_CL_ENTREZ <- na.omit(linking_CL) #675 genes left. 
+ENTREZIDs <- linking_CL_ENTREZ$ENTREZ
+ENTREZIDs <- noquote(ENTREZIDs)
+
+write.table(ENTREZIDs,row.names = FALSE, col.names = FALSE, quote = FALSE, "ENTREZIDs_CL.txt")
+
+
+#get ENTREZ IDs for all CC genes identified by maSigPro 
+CL_tstep_annotated_probes<- read.delim("C:/Users/laure/OneDrive/Documents/4th Year/4th year semester 2/BE488 Research Project/CL_tstep_annotated_probes.txt", header = TRUE, sep = "\t")
+CL_tstep_annotated_probes <- distinct(CL_tstep_annotated_probes, .keep_all = TRUE) #13,704 genes
+CL_tstep_annotated_probes[CL_tstep_annotated_probes==0] <- NA
+CL_tstep_annotated_probes <- na.omit(CL_tstep_annotated_probes)
+#re-read CL_tstep_annotated probes in when finished to get it back to normal
+
+x <- illuminaHumanv4ENTREZID
+length(x) # list of 48,107 of linked probes and genes
+mapped_probes <- mappedkeys(x) # Convert to a list
+xx <- as.list(x[mapped_probes]) # compare mapped probes # 22,283 elements
+if(length(xx) > 0) { 
+all_ENTREZIDs <-  xx[rownames(CL_tstep_annotated_probes)] 
+ }
+ 
+#add to dataframe
+CL_tstep_annotated_probes$ENTREZ <- all_ENTREZIDs
+
+#make copy without NULL ENTREZIDs
+CL_tstep_annotated_probes <- CL_tstep_annotated_probes[CL_tstep_annotated_probes$ENTREZ!="NULL",]  #13,376 left
+all_ENTREZIDs <- CL_tstep_annotated_probes$ENTREZ
+all_ENTREZIDs <- noquote(all_ENTREZIDs)
+
+write.table(all_ENTREZIDs,row.names = FALSE, col.names = FALSE, quote = FALSE, "all_ENTREZIDs_CL.txt")
+
+
+#WHAT IS SIGNIFICANT EMPIRICALLY??
+#Steps: 
+#get probes in the top 5% of p-values
+#get probes in the top 5% of R2 values
+#what probes belong to top 5% of both p and R2 distributions? combining above code and adding a filter step to get those that belong in both categories
+
+#CAMA1
+top5percent_pvalue1<- quantile(CAMA1_tstep$sol[,1], probs = c(0.05)) #probes in lowest 5% of pvalues - the most significant. 
+CAMA1_top5_pvalue <- dplyr::filter(CAMA1_tstep$sol, CAMA1_tstep$sol[,1] <= top5percent_pvalue1) #156 probes
+dim(CAMA1_top5_pvalue)
+
+top5percent_r2_1<- quantile(CAMA1_tstep$sol[,2], probs = c(0.95)) #probes in the highest 5% of r2 values - account for most biological changes?
+CAMA1_top5_r2 <- dplyr::filter(CAMA1_tstep$sol, CAMA1_tstep$sol[,2] >= top5percent_r2_1) #156 probes
+dim(CAMA1_top5_r2)
+
+length(intersect(rownames(CAMA1_top5_r2), rownames(CAMA1_top5_pvalue))) #58 probes, take out length to get names of probes. 
+
+CAMA1_top5_both <- dplyr::filter(CAMA1_tstep$sol, CAMA1_tstep$sol[,2] >= top5percent_r2_1 & CAMA1_tstep$sol[,1] <= top5percent_pvalue1) #58 probes significant in top5s
+
+
+#MCF7
+top5percent_pvalue2<- quantile(MCF7_tstep$sol[,1], probs = c(0.05))
+MCF7_top5_pvalue <- dplyr::filter(MCF7_tstep$sol, MCF7_tstep$sol[,1] <= top5percent_pvalue2) 
+dim(MCF7_top5_pvalue) #180 probes
+
+top5percent_r2_2<- quantile(MCF7_tstep$sol[,2], probs = c(0.95))
+MCF7_top5_r2 <- dplyr::filter(MCF7_tstep$sol, MCF7_tstep$sol[,2] >= top5percent_r2_2) #180 probes
+
+MCF7_top5_both <- dplyr::filter(MCF7_tstep$sol, MCF7_tstep$sol[,2] >= top5percent_r2_2 & MCF7_tstep$sol[,1] <= top5percent_pvalue2) #115 probes in top 5% of p values and R2 
+
+
+#T47D
+T47D_tstep_pvalue_vector <- T47D_tstep$sol[,1] #make a vector of p-values in T47D_tstep
+T47D_tstep_pvalue_vector <- na.omit(T47D_tstep_pvalue_vector) #remove NAs from this vector - need to do this so that it will work with quantile() 
+
+top5percent_pvalue3<- quantile(T47D_tstep_pvalue_vector, probs = c(0.05))
+T47D_top5_pvalue <- dplyr::filter(T47D_tstep$sol, T47D_tstep$sol[,1] <= top5percent_pvalue3) 
+dim(T47D_top5_pvalue) #292 probes in top 5% of most significant p values
+
+top5percent_r2_3<- quantile(T47D_tstep$sol[,2], probs = c(0.95))
+T47D_top5_r2 <- dplyr::filter(T47D_tstep$sol, T47D_tstep$sol[,2] >= top5percent_r2_3) 
+dim(T47D_top5_r2) #292 probes
+
+T47D_top5_both <- dplyr::filter(T47D_tstep$sol, T47D_tstep$sol[,2] >= top5percent_r2_3 & T47D_tstep$sol[,1] <= top5percent_pvalue3)
+dim(T47D_top5_both) #179 probes
+
+
+#Global comparison of cell lines
+CL_tstep_pvalue_vector <- CL_tstep$sol[,1] #make a vector of p-values in CL_tstep
+CL_tstep_pvalue_vector <- na.omit(CL_tstep_pvalue_vector) #remove NAs from this vector - need to do this so that it will work with quantile() 
+
+top5percent_pvalue4<- quantile(CL_tstep_pvalue_vector, probs = c(0.05))
+CL_top5_pvalue <- dplyr::filter(CL_tstep$sol, CL_tstep$sol[,1] <= top5percent_pvalue4)
+dim(CL_top5_pvalue) #929 probes 
+
+top5percent_r2_4<- quantile(CL_tstep$sol[,2], probs = c(0.95))
+CL_top5_r2 <- dplyr::filter(CL_tstep$sol, CL_tstep$sol[,2] >= top5percent_r2_4)
+dim(CL_top5_r2) #929 probes
+
+CL_top5_both <- dplyr::filter(CL_tstep$sol, CL_tstep$sol[,2] >= top5percent_r2_4 & CL_tstep$sol[,1] <= top5percent_pvalue4) 
+dim(CL_top5_both) #821 probes
+
+
+
+#make a table of numbers of probes in top 5% of pvalue and r2 distribution
+analysis <- c("CAMA1", "MCF7", "T47D", "CL")
+pvalue_top5_probes <- c(nrow(CAMA1_top5_pvalue), nrow(MCF7_top5_pvalue), nrow(T47D_top5_pvalue), nrow(CL_top5_pvalue))
+r2_top5_probes <- c(nrow(CAMA1_top5_r2), nrow(MCF7_top5_r2), nrow(T47D_top5_r2), nrow(CL_top5_r2))
+both_top5 <- c(nrow(CAMA1_top5_both), nrow(MCF7_top5_both), nrow(T47D_top5_both), nrow(CL_top5_both))
+topfives <- data.frame(analysis, pvalue_top5_probes, r2_top5_probes, both_top5)
+View(topfives)
+
+
+
+
+
+
+
+
+#SAMPLE LABEL PERMUTATIONS#
+
+#from pakcage picante
+#install.packages("picante")
+library(picante)
+random_CAMA1_design_times <- randomizeMatrix(CAMA1_design[,3:8],null.model = "frequency",iterations = 30)
+random_CAMA1_design <- cbind(CAMA1_design[,1:2], random_CAMA1_design_times)
+#but a 1 can appear more than once in a row → dont want this as sample will be analysed twice,one wont be analysed at all. 
+
+#best solution? 
+random_CAMA1_design_times <- permatswap(CAMA1_design[,3:8], times = 400, burnin = 20000, thin = 300, mtype = "prab", fixedmar = "both")
+#contains 50 random matrices. of times. burnin = number of swaps made before random sampling is done. thin = take a random draw every 5 swaps. mprab = specifying binary data. fixedmar = make sure row and column totals stay the same. 
+
+#random_CL_design_times$perm[1] #get first matrix
+
+#in a loop -- could loop thru the matrices in random_CAMA1_design. need to add first 2 columns of CAMA1_design to each random_CAMA1_design_times matrice before using in masigpro. 
+
+
+#empty data frames
+random_pvalues <- data.frame(matrix(nrow = nrow(CAMA1_tstep$sol), ncol = length(random_CAMA1_design_times$perm)))
+dim(random_pvalues) #3119 rows and 100 columns. 
+
+random_r2 <- data.frame(matrix(nrow = nrow(CAMA1_tstep$sol), ncol = length(random_CAMA1_design_times$perm)))
+dim(random_r2) #3119 rows and 100 columns.
+
+
+
+#try w/ 3 permutations first
+for(i in random_CAMA1_design_times$perm){
+for(k in 1:length(random_CAMA1_design_times$perm)){
+perms <- matrix(unlist(i), nrow = 15, ncol = 6, byrow = FALSE)
+random_CAMA1_design <- cbind(CAMA1_design[,1:2], perms)
+CAMA1_edesign <- make.design.matrix(CAMA1_design, degree = 1)
+CAMA1_fit <- p.vector(CAMA1_eset, CAMA1_edesign, Q = 0.05, MT.adjust = "BH")
+CAMA1_tstep <- T.fit(CAMA1_fit, step.method = "backward", alfa = 0.05) 
+random_pvalues[,k] <- CAMA1_tstep$sol[,1]
+random_r2[,k] <- CAMA1_tstep$sol[,2]
+}
+}
+
+
+#MCF7
+random_MCF7_design_times <- permatswap(MCF7_design[,3:8], times = 500, burnin = 20000, thin = 300, mtype = "prab", fixedmar = "both")
+#contains 400 random matrices. of times. burnin = number of swaps made before random sampling is done. thin = take a random draw every 5 swaps. mprab = specifying binary data. fixedmar = make sure row and column totals stay the same. 
+
+random_MCF7_design_times$perm[1] #get first matrix
+
+#empty data frames
+random_pvalues2 <- data.frame(matrix(nrow = nrow(MCF7_tstep$sol), ncol = length(random_MCF7_design_times$perm)))
+
+random_r2_2 <- data.frame(matrix(nrow = nrow(MCF7_tstep$sol), ncol = length(random_MCF7_design_times$perm)))
+
+for(i in random_MCF7_design_times$perm){
+  for(k in 1:length(random_MCF7_design_times$perm)){
+    perms <- matrix(unlist(i), nrow = 17, ncol = 6, byrow = FALSE)
+    random_MCF7_design <- cbind(MCF7_design[,1:2], perms)
+    MCF7_edesign <- make.design.matrix(MCF7_design, degree = 1)
+    MCF7_fit <- p.vector(MCF7_eset, MCF7_edesign, Q = 0.05, MT.adjust = "BH")
+    MCF7_tstep <- T.fit(MCF7_fit, step.method = "backward", alfa = 0.05) 
+    random_pvalues2[,k] <- MCF7_tstep$sol[,1]
+    random_r2_2[,k] <- MCF7_tstep$sol[,2]
+  }
+}
+
+
+write.table(random_pvalues2,file="random_pvalues_MCF7.txt", sep="\t")
+write.table(random_r2_2,file="random_r2_MCF7.txt", sep="\t")
+
+
+
+#T47D
+random_T47D_design_times <- permatswap(T47D_design[,3:8], times = 500, burnin = 20000, thin = 300, mtype = "prab", fixedmar = "both")
+#contains 400 random matrices. of times. burnin = number of swaps made before random sampling is done. thin = take a random draw every 5 swaps. mprab = specifying binary data. fixedmar = make sure row and column totals stay the same. 
+
+
+#empty data frames
+random_pvalues3 <- data.frame(matrix(nrow = nrow(T47D_tstep$sol), ncol = length(random_T47D_design_times$perm)))
+
+random_r2_3 <- data.frame(matrix(nrow = nrow(T47D_tstep$sol), ncol = length(random_T47D_design_times$perm)))
+
+for(i in random_T47D_design_times$perm){
+  for(k in 1:length(random_T47D_design_times$perm)){
+    perms <- matrix(unlist(i), nrow = 17, ncol = 6, byrow = FALSE)
+    random_T47D_design <- cbind(T47D_design[,1:2], perms)
+    T47D_edesign <- make.design.matrix(T47D_design, degree = 1)
+    T47D_fit <- p.vector(T47D_eset, T47D_edesign, Q = 0.05, MT.adjust = "BH")
+    T47D_tstep <- T.fit(T47D_fit, step.method = "backward", alfa = 0.05) 
+    random_pvalues3[,k] <- T47D_tstep$sol[,1]
+    random_r2_3[,k] <- T47D_tstep$sol[,2]
+  }
+}
+
+
+write.table(random_pvalues3,file="random_pvalues_T47D.txt", sep="\t")
+write.table(random_r2_3,file="random_r2_T47D.txt", sep="\t")
+
+
+
+#CL
+random_CL_design_times <- permatswap(CL_design[,3:6], times = 500, burnin = 20000, thin = 300, mtype = "prab", fixedmar = "both")
+#contains 400 random matrices. of times. burnin = number of swaps made before random sampling is done. thin = take a random draw every 5 swaps. mprab = specifying binary data. fixedmar = make sure row and column totals stay the same. 
+
+
+#empty data frames
+random_pvalues4 <- data.frame(matrix(nrow = nrow(CL_tstep$sol), ncol = length(random_CL_design_times$perm)))
+
+random_r2_4 <- data.frame(matrix(nrow = nrow(CL_tstep$sol), ncol = length(random_CL_design_times$perm)))
+
+
+for(i in random_CL_design_times$perm){
+  for(k in 1:length(random_CL_design_times$perm)){
+    perms <- matrix(unlist(i), nrow = 49, ncol = 4, byrow = FALSE)
+    random_CL_design <- cbind(CL_design[,1:2], perms)
+    CL_edesign <- make.design.matrix(CL_design, degree = 1)
+    CL_fit <- p.vector(sampleeset4, CL_edesign, Q = 0.05, MT.adjust = "BH")
+    CL_tstep <- T.fit(CL_fit, step.method = "backward", alfa = 0.05) 
+    random_pvalues4[,k] <- CL_tstep$sol[,1]
+    random_r2_4[,k] <- CL_tstep$sol[,2]
+  }
+}
+
+write.table(random_pvalues4,file="random_pvalues_CL.txt", sep="\t")
+write.table(random_r2_4,file="random_r2_CL.txt", sep="\t")
+
+
+
+
+##### plotting p values of the permutated p values #####
+
+#import the files from Winscp
+#CAMA1 files
+random_pvalues_CAMA1<- read.delim("C:/Users/laure/OneDrive/Documents/4th Year/4th year semester 2/BE488 Research Project/random_pvalues_CAMA1.2.txt", header = TRUE, sep = "\t") 
+View(random_pvalues_CAMA1)
+
+random_r2_CAMA1<- read.delim("C:/Users/laure/OneDrive/Documents/4th Year/4th year semester 2/BE488 Research Project/random_r2_CAMA1.2.txt", header = TRUE, sep = "\t") 
+View(random_r2_CAMA1)
+
+#CL files
+CL_tstep_annotated_probes<- read.delim("C:/Users/laure/OneDrive/Documents/4th Year/4th year semester 2/BE488 Research Project/CL_tstep_annotated_probes.txt", header = TRUE, sep = "\t") 
+
+
+
+
+
